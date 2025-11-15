@@ -1,79 +1,76 @@
-import { useEffect, useState } from 'react';
-import { supabase } from '../../lib/supabase';
-import { useAuth } from '../../contexts/AuthContext';
-import { FileText, Plus, Download, Trash2, Search, Filter } from 'lucide-react';
-import { UploadResourceModal } from './UploadResourceModal';
+import { useEffect, useState, useCallback } from "react";
+import { supabase } from "../../lib/supabase";
+import { useAuth } from "../../contexts/AuthContext";
+import { FileText, Plus, Download, Trash2, Search } from "lucide-react";
+import { UploadResourceModal } from "./UploadResourceModal";
+import type { StudyGroup, Resource } from "../../lib/types";
 
-interface Group {
-  id: string;
-  name: string;
-}
-
-interface Resource {
-  id: string;
-  title: string;
-  description: string;
-  file_type: string;
-  file_url: string;
-  file_size: number;
-  uploaded_by: string;
-  group_id: string;
-  created_at: string;
+type ResourceWithGroup = Resource & {
   study_groups: {
     name: string;
   };
-}
+};
 
 export function ResourcesList() {
   const { user } = useAuth();
-  const [groups, setGroups] = useState<Group[]>([]);
-  const [resources, setResources] = useState<Resource[]>([]);
-  const [filteredResources, setFilteredResources] = useState<Resource[]>([]);
-  const [selectedGroupId, setSelectedGroupId] = useState<string>('all');
-  const [searchQuery, setSearchQuery] = useState('');
+  const [groups, setGroups] = useState<StudyGroup[]>([]);
+  const [resources, setResources] = useState<ResourceWithGroup[]>([]);
+  const [filteredResources, setFilteredResources] = useState<
+    ResourceWithGroup[]
+  >([]);
+  const [selectedGroupId, setSelectedGroupId] = useState<string>("all");
+  const [searchQuery, setSearchQuery] = useState("");
   const [loading, setLoading] = useState(true);
   const [showUploadModal, setShowUploadModal] = useState(false);
 
-  useEffect(() => {
-    loadData();
-  }, [user]);
-
-  useEffect(() => {
-    filterResources();
-  }, [resources, selectedGroupId, searchQuery]);
-
-  const loadData = async () => {
-    if (!user) return;
+  const loadData = useCallback(async () => {
+    if (!user?.id) return;
 
     const [groupsRes, resourcesRes] = await Promise.all([
       supabase
-        .from('group_memberships')
-        .select('study_groups(id, name)')
-        .eq('user_id', user.id),
+        .from("group_memberships")
+        .select("study_groups(id, name)")
+        .eq("user_id", user.id),
       supabase
-        .from('resources')
-        .select('*, study_groups(name)')
-        .order('created_at', { ascending: false }),
+        .from("resources")
+        .select("*, study_groups(name)")
+        .order("created_at", { ascending: false }),
     ]);
 
-    if (groupsRes.data) {
-      const groupsData = groupsRes.data.map((m: any) => m.study_groups).filter(Boolean);
-      setGroups(groupsData);
-    }
+    const groupsData = (
+      groupsRes as unknown as {
+        data: Array<{
+          study_groups: Pick<StudyGroup, "id" | "name"> | null;
+        }> | null;
+      }
+    ).data;
 
-    if (resourcesRes.data) {
-      const userGroupIds = groupsRes.data?.map((m: any) => m.study_groups?.id).filter(Boolean) || [];
-      const filteredData = resourcesRes.data.filter((r: any) => userGroupIds.includes(r.group_id));
-      setResources(filteredData);
+    if (groupsData) {
+      const groups = groupsData
+        .map((m) => m.study_groups)
+        .filter((g): g is Pick<StudyGroup, "id" | "name"> => g !== null);
+      setGroups(groups as StudyGroup[]);
+
+      const userGroupIds = groups.map((g) => g.id);
+
+      const resourcesData = (
+        resourcesRes as unknown as { data: ResourceWithGroup[] | null }
+      ).data;
+      if (resourcesData) {
+        const filteredData = resourcesData.filter((r) =>
+          userGroupIds.includes(r.group_id)
+        );
+        setResources(filteredData);
+      }
     }
 
     setLoading(false);
-  };
+  }, [user]);
 
-  const filterResources = () => {
+  const filterResources = useCallback(() => {
     let filtered = resources;
 
-    if (selectedGroupId !== 'all') {
+    if (selectedGroupId !== "all") {
       filtered = filtered.filter((r) => r.group_id === selectedGroupId);
     }
 
@@ -87,27 +84,35 @@ export function ResourcesList() {
     }
 
     setFilteredResources(filtered);
-  };
+  }, [resources, selectedGroupId, searchQuery]);
+
+  useEffect(() => {
+    loadData();
+  }, [loadData]);
+
+  useEffect(() => {
+    filterResources();
+  }, [filterResources]);
 
   const handleDeleteResource = async (resourceId: string, fileUrl: string) => {
-    if (!confirm('Delete this resource?')) return;
+    if (!confirm("Delete this resource?")) return;
 
-    const filePath = fileUrl.split('/').pop();
+    const filePath = fileUrl.split("/").pop();
     if (filePath) {
-      await supabase.storage.from('resources').remove([filePath]);
+      await supabase.storage.from("resources").remove([filePath]);
     }
 
-    await supabase.from('resources').delete().eq('id', resourceId);
+    await supabase.from("resources").delete().eq("id", resourceId);
     loadData();
   };
 
   const formatFileSize = (bytes: number) => {
-    if (bytes < 1024) return bytes + ' B';
-    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
-    return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+    if (bytes < 1024) return bytes + " B";
+    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + " KB";
+    return (bytes / (1024 * 1024)).toFixed(1) + " MB";
   };
 
-  const getFileIcon = (fileType: string) => {
+  const getFileIcon = () => {
     return <FileText className="w-5 h-5" />;
   };
 
@@ -123,14 +128,22 @@ export function ResourcesList() {
     return (
       <div>
         <div className="mb-6">
-          <h2 className="text-3xl font-bold text-gray-900 dark:text-white">Resources</h2>
-          <p className="text-gray-600 dark:text-gray-400 mt-1">Share and access study materials</p>
+          <h2 className="text-3xl font-bold text-gray-900 dark:text-white">
+            Resources
+          </h2>
+          <p className="text-gray-600 dark:text-gray-400 mt-1">
+            Share and access study materials
+          </p>
         </div>
 
         <div className="text-center py-12 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 transition-colors">
           <FileText className="w-12 h-12 text-gray-400 dark:text-gray-500 mx-auto mb-4" />
-          <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">No groups yet</h3>
-          <p className="text-gray-600 dark:text-gray-400">Join a group to share resources</p>
+          <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">
+            No groups yet
+          </h3>
+          <p className="text-gray-600 dark:text-gray-400">
+            Join a group to share resources
+          </p>
         </div>
       </div>
     );
@@ -140,8 +153,12 @@ export function ResourcesList() {
     <div>
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h2 className="text-3xl font-bold text-gray-900 dark:text-white">Resources</h2>
-          <p className="text-gray-600 dark:text-gray-400 mt-1">Share and access study materials</p>
+          <h2 className="text-3xl font-bold text-gray-900 dark:text-white">
+            Resources
+          </h2>
+          <p className="text-gray-600 dark:text-gray-400 mt-1">
+            Share and access study materials
+          </p>
         </div>
         <button
           onClick={() => setShowUploadModal(true)}
@@ -181,13 +198,15 @@ export function ResourcesList() {
       {filteredResources.length === 0 ? (
         <div className="text-center py-12 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 transition-colors">
           <FileText className="w-12 h-12 text-gray-400 dark:text-gray-500 mx-auto mb-4" />
-          <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">No resources found</h3>
+          <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">
+            No resources found
+          </h3>
           <p className="text-gray-600 dark:text-gray-400 mb-4">
-            {searchQuery || selectedGroupId !== 'all'
-              ? 'Try adjusting your filters'
-              : 'Upload a resource to get started'}
+            {searchQuery || selectedGroupId !== "all"
+              ? "Try adjusting your filters"
+              : "Upload a resource to get started"}
           </p>
-          {!searchQuery && selectedGroupId === 'all' && (
+          {!searchQuery && selectedGroupId === "all" && (
             <button
               onClick={() => setShowUploadModal(true)}
               className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 dark:bg-blue-500 text-white rounded-lg hover:bg-blue-700 dark:hover:bg-blue-600 transition-colors"
@@ -210,14 +229,15 @@ export function ResourcesList() {
                 <div className="flex items-start justify-between mb-3">
                   <div className="flex items-center gap-3 flex-1">
                     <div className="w-10 h-10 bg-blue-100 dark:bg-blue-900 rounded-lg flex items-center justify-center flex-shrink-0">
-                      {getFileIcon(resource.file_type)}
+                      {getFileIcon()}
                     </div>
                     <div className="flex-1 min-w-0">
                       <h3 className="font-semibold text-gray-900 dark:text-white truncate">
                         {resource.title}
                       </h3>
                       <p className="text-xs text-gray-500 dark:text-gray-400">
-                        {resource.file_type.toUpperCase()} • {formatFileSize(resource.file_size)}
+                        {resource.file_type.toUpperCase()} •{" "}
+                        {formatFileSize(resource.file_size)}
                       </p>
                     </div>
                   </div>
@@ -250,7 +270,9 @@ export function ResourcesList() {
                     </a>
                     {isOwner && (
                       <button
-                        onClick={() => handleDeleteResource(resource.id, resource.file_url)}
+                        onClick={() =>
+                          handleDeleteResource(resource.id, resource.file_url)
+                        }
                         className="p-2 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded transition-colors"
                       >
                         <Trash2 className="w-4 h-4" />

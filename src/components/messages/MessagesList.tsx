@@ -1,39 +1,127 @@
-import { useEffect, useState, useRef } from 'react';
-import { supabase } from '../../lib/supabase';
-import { useAuth } from '../../contexts/AuthContext';
-import { MessageSquare, Send, Reply, MoreVertical, Trash2 } from 'lucide-react';
-import type { RealtimeChannel } from '@supabase/supabase-js';
+import { useCallback, useEffect, useState, useRef } from "react";
+import { supabase } from "../../lib/supabase";
+import { useAuth } from "../../contexts/AuthContext";
+import { MessageSquare, Send, Reply, Trash2 } from "lucide-react";
+import type { RealtimeChannel } from "@supabase/supabase-js";
+import type { Message, StudyGroup } from "../../lib/types";
 
-interface Group {
-  id: string;
-  name: string;
-}
-
-interface Message {
-  id: string;
-  content: string;
-  user_id: string;
-  group_id: string;
-  reply_to: string | null;
-  created_at: string;
+type MessageWithParent = Message & {
   parent_message?: {
     id: string;
     content: string;
     user_id: string;
   };
-}
+};
 
 export function MessagesList() {
   const { user } = useAuth();
-  const [groups, setGroups] = useState<Group[]>([]);
+  const [groups, setGroups] = useState<StudyGroup[]>([]);
   const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
-  const [messages, setMessages] = useState<Message[]>([]);
-  const [newMessage, setNewMessage] = useState('');
-  const [replyTo, setReplyTo] = useState<Message | null>(null);
+  const [messages, setMessages] = useState<MessageWithParent[]>([]);
+  const [newMessage, setNewMessage] = useState("");
+  const [replyTo, setReplyTo] = useState<MessageWithParent | null>(null);
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const channelRef = useRef<RealtimeChannel | null>(null);
+
+  useEffect(() => {
+    scrollToBottom();
+  }, [messages]);
+
+  const loadGroups = useCallback(async () => {
+    if (!user) return;
+
+    const { data } = await supabase
+      .from("group_memberships")
+      .select("study_groups(id, name)")
+      .eq("user_id", user.id);
+
+    if (data) {
+      type MembershipWithGroup = { study_groups: StudyGroup | null };
+      const groupsData = (data as MembershipWithGroup[])
+        .map((m) => m.study_groups)
+        .filter(Boolean) as StudyGroup[];
+      setGroups(groupsData);
+      if (groupsData.length > 0 && !selectedGroupId) {
+        setSelectedGroupId(groupsData[0].id);
+      }
+    }
+
+    setLoading(false);
+  }, [user, selectedGroupId]);
+
+  const loadMessages = useCallback(async () => {
+    if (!selectedGroupId) return;
+
+    const { data } = await supabase
+      .from("messages")
+      .select("*")
+      .eq("group_id", selectedGroupId)
+      .order("created_at", { ascending: true })
+      .limit(100);
+
+    if (data) {
+      const rows = (data as Message[]) || [];
+      const messagesWithReplies = await Promise.all(
+        rows.map(async (msg) => {
+          if (msg.reply_to) {
+            const { data: parentMsg } = await supabase
+              .from("messages")
+              .select("id, content, user_id")
+              .eq("id", msg.reply_to)
+              .single();
+
+            return { ...msg, parent_message: parentMsg || undefined };
+          }
+          return msg;
+        })
+      );
+
+      setMessages(messagesWithReplies);
+    }
+  }, [selectedGroupId]);
+
+  const setupRealtimeSubscription = useCallback(() => {
+    if (!selectedGroupId) return;
+
+    if (channelRef.current) {
+      supabase.removeChannel(channelRef.current);
+    }
+
+    const channel = supabase
+      .channel(`messages:${selectedGroupId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "messages",
+          filter: `group_id=eq.${selectedGroupId}`,
+        },
+        async (payload) => {
+          const newMsg = payload.new as Message;
+
+          if (newMsg.reply_to) {
+            const { data: parentMsg } = await supabase
+              .from("messages")
+              .select("id, content, user_id")
+              .eq("id", newMsg.reply_to)
+              .single();
+
+            setMessages((prev) => [
+              ...prev,
+              { ...newMsg, parent_message: parentMsg || undefined },
+            ]);
+          } else {
+            setMessages((prev) => [...prev, newMsg]);
+          }
+        }
+      )
+      .subscribe();
+
+    channelRef.current = channel;
+  }, [selectedGroupId]);
 
   useEffect(() => {
     loadGroups();
@@ -42,7 +130,7 @@ export function MessagesList() {
         supabase.removeChannel(channelRef.current);
       }
     };
-  }, []);
+  }, [loadGroups]);
 
   useEffect(() => {
     if (selectedGroupId) {
@@ -54,98 +142,7 @@ export function MessagesList() {
         supabase.removeChannel(channelRef.current);
       }
     };
-  }, [selectedGroupId]);
-
-  useEffect(() => {
-    scrollToBottom();
-  }, [messages]);
-
-  const loadGroups = async () => {
-    if (!user) return;
-
-    const { data } = await supabase
-      .from('group_memberships')
-      .select('study_groups(id, name)')
-      .eq('user_id', user.id);
-
-    if (data) {
-      const groupsData = data.map((m: any) => m.study_groups).filter(Boolean);
-      setGroups(groupsData);
-      if (groupsData.length > 0 && !selectedGroupId) {
-        setSelectedGroupId(groupsData[0].id);
-      }
-    }
-
-    setLoading(false);
-  };
-
-  const loadMessages = async () => {
-    if (!selectedGroupId) return;
-
-    const { data } = await supabase
-      .from('messages')
-      .select('*')
-      .eq('group_id', selectedGroupId)
-      .order('created_at', { ascending: true })
-      .limit(100);
-
-    if (data) {
-      const messagesWithReplies = await Promise.all(
-        data.map(async (msg) => {
-          if (msg.reply_to) {
-            const { data: parentMsg } = await supabase
-              .from('messages')
-              .select('id, content, user_id')
-              .eq('id', msg.reply_to)
-              .single();
-
-            return { ...msg, parent_message: parentMsg };
-          }
-          return msg;
-        })
-      );
-
-      setMessages(messagesWithReplies);
-    }
-  };
-
-  const setupRealtimeSubscription = () => {
-    if (!selectedGroupId) return;
-
-    if (channelRef.current) {
-      supabase.removeChannel(channelRef.current);
-    }
-
-    const channel = supabase
-      .channel(`messages:${selectedGroupId}`)
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'messages',
-          filter: `group_id=eq.${selectedGroupId}`,
-        },
-        async (payload) => {
-          const newMsg = payload.new as Message;
-
-          if (newMsg.reply_to) {
-            const { data: parentMsg } = await supabase
-              .from('messages')
-              .select('id, content, user_id')
-              .eq('id', newMsg.reply_to)
-              .single();
-
-            setMessages((prev) => [...prev, { ...newMsg, parent_message: parentMsg || undefined }]);
-          } else {
-            setMessages((prev) => [...prev, newMsg]);
-          }
-        }
-      )
-      .subscribe();
-
-    channelRef.current = channel;
-  };
+  }, [selectedGroupId, loadMessages, setupRealtimeSubscription]);
 
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -153,7 +150,8 @@ export function MessagesList() {
 
     setSending(true);
 
-    const { error } = await supabase.from('messages').insert({
+    // @ts-expect-error - Supabase insert types not properly inferred
+    const { error } = await supabase.from("messages").insert({
       content: newMessage.trim(),
       group_id: selectedGroupId,
       user_id: user.id,
@@ -161,7 +159,7 @@ export function MessagesList() {
     });
 
     if (!error) {
-      setNewMessage('');
+      setNewMessage("");
       setReplyTo(null);
     }
 
@@ -169,14 +167,14 @@ export function MessagesList() {
   };
 
   const handleDeleteMessage = async (messageId: string) => {
-    if (!confirm('Delete this message?')) return;
+    if (!confirm("Delete this message?")) return;
 
-    await supabase.from('messages').delete().eq('id', messageId);
+    await supabase.from("messages").delete().eq("id", messageId);
     setMessages((prev) => prev.filter((m) => m.id !== messageId));
   };
 
   const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   };
 
   if (loading) {
@@ -191,8 +189,12 @@ export function MessagesList() {
     return (
       <div className="text-center py-12 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
         <MessageSquare className="w-12 h-12 text-gray-400 dark:text-gray-500 mx-auto mb-4" />
-        <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">No groups yet</h3>
-        <p className="text-gray-600 dark:text-gray-400">Join a group to start chatting</p>
+        <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">
+          No groups yet
+        </h3>
+        <p className="text-gray-600 dark:text-gray-400">
+          Join a group to start chatting
+        </p>
       </div>
     );
   }
@@ -202,7 +204,9 @@ export function MessagesList() {
   return (
     <div className="flex h-[calc(100vh-12rem)] gap-4">
       <div className="w-64 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4 overflow-y-auto transition-colors">
-        <h3 className="font-semibold text-gray-900 dark:text-white mb-3">Your Groups</h3>
+        <h3 className="font-semibold text-gray-900 dark:text-white mb-3">
+          Your Groups
+        </h3>
         <div className="space-y-2">
           {groups.map((group) => (
             <button
@@ -210,8 +214,8 @@ export function MessagesList() {
               onClick={() => setSelectedGroupId(group.id)}
               className={`w-full text-left px-3 py-2 rounded-lg transition-colors ${
                 selectedGroupId === group.id
-                  ? 'bg-blue-50 dark:bg-blue-900 text-blue-700 dark:text-blue-300'
-                  : 'text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700'
+                  ? "bg-blue-50 dark:bg-blue-900 text-blue-700 dark:text-blue-300"
+                  : "text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
               }`}
             >
               <div className="flex items-center gap-2">
@@ -225,7 +229,9 @@ export function MessagesList() {
 
       <div className="flex-1 flex flex-col bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 transition-colors">
         <div className="p-4 border-b border-gray-200 dark:border-gray-700">
-          <h3 className="font-semibold text-gray-900 dark:text-white">{selectedGroup?.name}</h3>
+          <h3 className="font-semibold text-gray-900 dark:text-white">
+            {selectedGroup?.name}
+          </h3>
           <p className="text-sm text-gray-500 dark:text-gray-400">Group Chat</p>
         </div>
 
@@ -236,28 +242,40 @@ export function MessagesList() {
             return (
               <div
                 key={message.id}
-                className={`flex ${isOwnMessage ? 'justify-end' : 'justify-start'}`}
+                className={`flex ${
+                  isOwnMessage ? "justify-end" : "justify-start"
+                }`}
               >
-                <div className={`max-w-[70%] ${isOwnMessage ? 'items-end' : 'items-start'} flex flex-col gap-1`}>
+                <div
+                  className={`max-w-[70%] ${
+                    isOwnMessage ? "items-end" : "items-start"
+                  } flex flex-col gap-1`}
+                >
                   {message.parent_message && (
                     <div className="text-xs p-2 bg-gray-100 dark:bg-gray-700 rounded border-l-2 border-blue-500 dark:border-blue-400">
-                      <p className="text-gray-500 dark:text-gray-400">Replying to:</p>
-                      <p className="text-gray-700 dark:text-gray-300 line-clamp-2">{message.parent_message.content}</p>
+                      <p className="text-gray-500 dark:text-gray-400">
+                        Replying to:
+                      </p>
+                      <p className="text-gray-700 dark:text-gray-300 line-clamp-2">
+                        {message.parent_message.content}
+                      </p>
                     </div>
                   )}
 
                   <div
                     className={`rounded-lg p-3 ${
                       isOwnMessage
-                        ? 'bg-blue-600 dark:bg-blue-500 text-white'
-                        : 'bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-white'
+                        ? "bg-blue-600 dark:bg-blue-500 text-white"
+                        : "bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-white"
                     }`}
                   >
                     <p className="break-words">{message.content}</p>
                   </div>
 
                   <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400 px-1">
-                    <span>{new Date(message.created_at).toLocaleTimeString()}</span>
+                    <span>
+                      {new Date(message.created_at).toLocaleTimeString()}
+                    </span>
                     <button
                       onClick={() => setReplyTo(message)}
                       className="hover:text-blue-600 dark:hover:text-blue-400"
@@ -284,8 +302,12 @@ export function MessagesList() {
           {replyTo && (
             <div className="mb-2 p-2 bg-blue-50 dark:bg-blue-900/20 rounded-lg flex items-start justify-between text-sm">
               <div className="flex-1">
-                <p className="text-blue-600 dark:text-blue-400 font-medium">Replying to:</p>
-                <p className="text-gray-700 dark:text-gray-300 line-clamp-1">{replyTo.content}</p>
+                <p className="text-blue-600 dark:text-blue-400 font-medium">
+                  Replying to:
+                </p>
+                <p className="text-gray-700 dark:text-gray-300 line-clamp-1">
+                  {replyTo.content}
+                </p>
               </div>
               <button
                 onClick={() => setReplyTo(null)}

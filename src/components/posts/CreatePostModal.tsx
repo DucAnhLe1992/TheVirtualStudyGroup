@@ -1,7 +1,7 @@
-import { useState } from 'react';
-import { supabase } from '../../lib/supabase';
-import { useAuth } from '../../contexts/AuthContext';
-import { X, AlertCircle } from 'lucide-react';
+import { useState } from "react";
+import { supabase } from "../../lib/supabase";
+import { useAuth } from "../../contexts/AuthContext";
+import { X, AlertCircle } from "lucide-react";
 
 interface CreatePostModalProps {
   groupId: string;
@@ -9,28 +9,35 @@ interface CreatePostModalProps {
   onSuccess: () => void;
 }
 
-export function CreatePostModal({ groupId, onClose, onSuccess }: CreatePostModalProps) {
+export function CreatePostModal({
+  groupId,
+  onClose,
+  onSuccess,
+}: CreatePostModalProps) {
   const { user } = useAuth();
-  const [title, setTitle] = useState('');
-  const [content, setContent] = useState('');
-  const [postType, setPostType] = useState<'question' | 'discussion' | 'article' | 'announcement' | 'solution'>('discussion');
-  const [error, setError] = useState('');
+  const [title, setTitle] = useState("");
+  const [content, setContent] = useState("");
+  const [postType, setPostType] = useState<
+    "question" | "discussion" | "article" | "announcement" | "solution"
+  >("discussion");
+  const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError('');
+    setError("");
 
     if (!user) return;
 
     if (!title.trim() || !content.trim()) {
-      setError('Please fill in all fields');
+      setError("Please fill in all fields");
       return;
     }
 
     setLoading(true);
 
-    const { error: insertError } = await supabase.from('posts').insert({
+    // @ts-expect-error - Supabase insert types not properly inferred
+    const { error: insertError } = await supabase.from("posts").insert({
       group_id: groupId,
       author_id: user.id,
       title: title.trim(),
@@ -52,7 +59,9 @@ export function CreatePostModal({ groupId, onClose, onSuccess }: CreatePostModal
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
       <div className="bg-white dark:bg-gray-800 rounded-lg max-w-2xl w-full p-6 transition-colors">
         <div className="flex items-center justify-between mb-6">
-          <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Create Post</h2>
+          <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
+            Create Post
+          </h2>
           <button
             onClick={onClose}
             className="text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
@@ -70,13 +79,25 @@ export function CreatePostModal({ groupId, onClose, onSuccess }: CreatePostModal
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label htmlFor="postType" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+            <label
+              htmlFor="postType"
+              className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
+            >
               Post Type
             </label>
             <select
               id="postType"
               value={postType}
-              onChange={(e) => setPostType(e.target.value as any)}
+              onChange={(e) =>
+                setPostType(
+                  e.target.value as
+                    | "question"
+                    | "discussion"
+                    | "article"
+                    | "announcement"
+                    | "solution"
+                )
+              }
               className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400"
             >
               <option value="discussion">Discussion</option>
@@ -86,16 +107,23 @@ export function CreatePostModal({ groupId, onClose, onSuccess }: CreatePostModal
               <option value="announcement">Announcement</option>
             </select>
             <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-              {postType === 'question' && 'Ask for help or clarification on a topic'}
-              {postType === 'discussion' && 'Start a conversation or share thoughts'}
-              {postType === 'article' && 'Share detailed knowledge or study notes'}
-              {postType === 'solution' && 'Share a solution to a problem'}
-              {postType === 'announcement' && 'Important information for the group'}
+              {postType === "question" &&
+                "Ask for help or clarification on a topic"}
+              {postType === "discussion" &&
+                "Start a conversation or share thoughts"}
+              {postType === "article" &&
+                "Share detailed knowledge or study notes"}
+              {postType === "solution" && "Share a solution to a problem"}
+              {postType === "announcement" &&
+                "Important information for the group"}
             </p>
           </div>
 
           <div>
-            <label htmlFor="title" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+            <label
+              htmlFor="title"
+              className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
+            >
               Title *
             </label>
             <input
@@ -111,7 +139,10 @@ export function CreatePostModal({ groupId, onClose, onSuccess }: CreatePostModal
           </div>
 
           <div>
-            <label htmlFor="content" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+            <label
+              htmlFor="content"
+              className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
+            >
               Content *
             </label>
             <textarea
@@ -141,7 +172,7 @@ export function CreatePostModal({ groupId, onClose, onSuccess }: CreatePostModal
               disabled={loading}
               className="flex-1 px-4 py-2 bg-blue-600 dark:bg-blue-500 text-white rounded-lg hover:bg-blue-700 dark:hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             >
-              {loading ? 'Publishing...' : 'Publish Post'}
+              {loading ? "Publishing..." : "Publish Post"}
             </button>
           </div>
         </form>

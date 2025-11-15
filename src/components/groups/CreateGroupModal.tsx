@@ -1,33 +1,38 @@
-import { useState } from 'react';
-import { supabase } from '../../lib/supabase';
-import { useAuth } from '../../contexts/AuthContext';
-import { X, AlertCircle } from 'lucide-react';
+import { useState } from "react";
+import { supabase } from "../../lib/supabase";
+import { useAuth } from "../../contexts/AuthContext";
+import { X, AlertCircle } from "lucide-react";
+import type { StudyGroup } from "../../lib/types";
 
 interface CreateGroupModalProps {
   onClose: () => void;
   onSuccess: () => void;
 }
 
-export function CreateGroupModal({ onClose, onSuccess }: CreateGroupModalProps) {
+export function CreateGroupModal({
+  onClose,
+  onSuccess,
+}: CreateGroupModalProps) {
   const { user } = useAuth();
-  const [name, setName] = useState('');
-  const [description, setDescription] = useState('');
-  const [subject, setSubject] = useState('');
+  const [name, setName] = useState("");
+  const [description, setDescription] = useState("");
+  const [subject, setSubject] = useState("");
   const [isPublic, setIsPublic] = useState(true);
   const [maxMembers, setMaxMembers] = useState(50);
-  const [error, setError] = useState('');
+  const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError('');
+    setError("");
 
     if (!user) return;
 
     setLoading(true);
 
     const { data: group, error: groupError } = await supabase
-      .from('study_groups')
+      .from("study_groups")
+      // @ts-expect-error - Supabase insert types not properly inferred
       .insert({
         name,
         description,
@@ -45,12 +50,15 @@ export function CreateGroupModal({ onClose, onSuccess }: CreateGroupModalProps) 
       return;
     }
 
+    const createdGroup = group as StudyGroup;
+
     const { error: membershipError } = await supabase
-      .from('group_memberships')
+      .from("group_memberships")
+      // @ts-expect-error - Supabase insert types not properly inferred
       .insert({
-        group_id: group.id,
+        group_id: createdGroup.id,
         user_id: user.id,
-        role: 'admin',
+        role: "admin",
       });
 
     if (membershipError) {
@@ -67,7 +75,9 @@ export function CreateGroupModal({ onClose, onSuccess }: CreateGroupModalProps) 
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
       <div className="bg-white dark:bg-gray-800 rounded-lg max-w-lg w-full p-6 transition-colors">
         <div className="flex items-center justify-between mb-6">
-          <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Create Study Group</h2>
+          <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
+            Create Study Group
+          </h2>
           <button
             onClick={onClose}
             className="text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
@@ -85,7 +95,10 @@ export function CreateGroupModal({ onClose, onSuccess }: CreateGroupModalProps) 
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label htmlFor="name" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+            <label
+              htmlFor="name"
+              className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
+            >
               Group Name *
             </label>
             <input
@@ -100,7 +113,10 @@ export function CreateGroupModal({ onClose, onSuccess }: CreateGroupModalProps) 
           </div>
 
           <div>
-            <label htmlFor="subject" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+            <label
+              htmlFor="subject"
+              className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
+            >
               Subject
             </label>
             <input
@@ -114,7 +130,10 @@ export function CreateGroupModal({ onClose, onSuccess }: CreateGroupModalProps) 
           </div>
 
           <div>
-            <label htmlFor="description" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+            <label
+              htmlFor="description"
+              className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
+            >
               Description
             </label>
             <textarea
@@ -128,7 +147,10 @@ export function CreateGroupModal({ onClose, onSuccess }: CreateGroupModalProps) 
           </div>
 
           <div>
-            <label htmlFor="maxMembers" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+            <label
+              htmlFor="maxMembers"
+              className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
+            >
               Maximum Members
             </label>
             <input
@@ -150,7 +172,10 @@ export function CreateGroupModal({ onClose, onSuccess }: CreateGroupModalProps) 
               onChange={(e) => setIsPublic(e.target.checked)}
               className="w-4 h-4 text-blue-600 border-gray-300 dark:border-gray-600 rounded focus:ring-blue-500 dark:focus:ring-blue-400"
             />
-            <label htmlFor="isPublic" className="text-sm text-gray-700 dark:text-gray-300">
+            <label
+              htmlFor="isPublic"
+              className="text-sm text-gray-700 dark:text-gray-300"
+            >
               Make this group public (anyone can join)
             </label>
           </div>
@@ -168,7 +193,7 @@ export function CreateGroupModal({ onClose, onSuccess }: CreateGroupModalProps) 
               disabled={loading}
               className="flex-1 px-4 py-2 bg-blue-600 dark:bg-blue-500 text-white rounded-lg hover:bg-blue-700 dark:hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             >
-              {loading ? 'Creating...' : 'Create Group'}
+              {loading ? "Creating..." : "Create Group"}
             </button>
           </div>
         </form>

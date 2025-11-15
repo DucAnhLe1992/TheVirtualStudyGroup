@@ -1,7 +1,7 @@
-import { useState } from 'react';
-import { useAuth } from '../../contexts/AuthContext';
-import { AlertCircle } from 'lucide-react';
-import { Provider } from '@supabase/supabase-js';
+import { useState } from "react";
+import { useAuth } from "../../contexts/AuthContext";
+import { AlertCircle } from "lucide-react";
+import { Provider } from "@supabase/supabase-js";
 
 interface LoginFormProps {
   onSwitchToSignup: () => void;
@@ -9,14 +9,14 @@ interface LoginFormProps {
 
 export function LoginForm({ onSwitchToSignup }: LoginFormProps) {
   const { signIn, signInWithProvider } = useAuth();
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [error, setError] = useState('');
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError('');
+    setError("");
     setLoading(true);
 
     const { error } = await signIn(email, password);
@@ -29,7 +29,7 @@ export function LoginForm({ onSwitchToSignup }: LoginFormProps) {
   };
 
   const handleSocialLogin = async (provider: Provider) => {
-    setError('');
+    setError("");
     const { error } = await signInWithProvider(provider);
     if (error) {
       setError(error.message);
@@ -39,7 +39,9 @@ export function LoginForm({ onSwitchToSignup }: LoginFormProps) {
   return (
     <div className="w-full max-w-md">
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-8 transition-colors">
-        <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-6">Sign In</h2>
+        <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-6">
+          Sign In
+        </h2>
 
         {error && (
           <div className="mb-4 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg flex items-start gap-2">
@@ -50,7 +52,10 @@ export function LoginForm({ onSwitchToSignup }: LoginFormProps) {
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label htmlFor="email" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+            <label
+              htmlFor="email"
+              className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
+            >
               Email
             </label>
             <input
@@ -65,7 +70,10 @@ export function LoginForm({ onSwitchToSignup }: LoginFormProps) {
           </div>
 
           <div>
-            <label htmlFor="password" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+            <label
+              htmlFor="password"
+              className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
+            >
               Password
             </label>
             <input
@@ -84,7 +92,7 @@ export function LoginForm({ onSwitchToSignup }: LoginFormProps) {
             disabled={loading}
             className="w-full bg-blue-600 dark:bg-blue-500 text-white py-2 px-4 rounded-lg hover:bg-blue-700 dark:hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium"
           >
-            {loading ? 'Signing in...' : 'Sign In'}
+            {loading ? "Signing in..." : "Sign In"}
           </button>
         </form>
 
@@ -93,12 +101,14 @@ export function LoginForm({ onSwitchToSignup }: LoginFormProps) {
             <div className="w-full border-t border-gray-300 dark:border-gray-600"></div>
           </div>
           <div className="relative flex justify-center text-sm">
-            <span className="px-2 bg-white dark:bg-gray-800 text-gray-500 dark:text-gray-400">Or continue with</span>
+            <span className="px-2 bg-white dark:bg-gray-800 text-gray-500 dark:text-gray-400">
+              Or continue with
+            </span>
           </div>
         </div>
 
         <button
-          onClick={() => handleSocialLogin('google')}
+          onClick={() => handleSocialLogin("google")}
           disabled={loading}
           className="w-full flex items-center justify-center gap-3 px-4 py-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
         >
@@ -120,12 +130,14 @@ export function LoginForm({ onSwitchToSignup }: LoginFormProps) {
               d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
             />
           </svg>
-          <span className="text-gray-700 dark:text-gray-300 font-medium">Google</span>
+          <span className="text-gray-700 dark:text-gray-300 font-medium">
+            Google
+          </span>
         </button>
 
         <div className="mt-6 text-center">
           <p className="text-sm text-gray-600 dark:text-gray-400">
-            Don't have an account?{' '}
+            Don't have an account?{" "}
             <button
               onClick={onSwitchToSignup}
               className="text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 font-medium"

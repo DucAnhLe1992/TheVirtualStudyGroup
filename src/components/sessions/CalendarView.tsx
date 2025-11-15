@@ -1,17 +1,17 @@
-import { useState, useEffect } from 'react';
-import { supabase } from '../../lib/supabase';
-import { useAuth } from '../../contexts/AuthContext';
-import { ChevronLeft, ChevronRight, Calendar as CalendarIcon } from 'lucide-react';
+import { useState, useEffect, useCallback } from "react";
+import { supabase } from "../../lib/supabase";
+import { useAuth } from "../../contexts/AuthContext";
+import { ChevronLeft, ChevronRight } from "lucide-react";
+import type { StudySession } from "../../lib/types";
 
-interface Session {
-  id: string;
-  title: string;
-  scheduled_for: string;
-  duration_minutes: number;
+type SessionForCalendar = Pick<
+  StudySession,
+  "id" | "title" | "scheduled_at" | "duration_minutes"
+> & {
   study_groups: {
     name: string;
   };
-}
+};
 
 interface CalendarViewProps {
   onSessionClick: (sessionId: string) => void;
@@ -20,41 +20,59 @@ interface CalendarViewProps {
 export function CalendarView({ onSessionClick }: CalendarViewProps) {
   const { user } = useAuth();
   const [currentDate, setCurrentDate] = useState(new Date());
-  const [sessions, setSessions] = useState<Session[]>([]);
+  const [sessions, setSessions] = useState<SessionForCalendar[]>([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    loadSessions();
-  }, [user, currentDate]);
+  const loadSessions = useCallback(async () => {
+    if (!user?.id) return;
 
-  const loadSessions = async () => {
-    if (!user) return;
+    const startOfMonth = new Date(
+      currentDate.getFullYear(),
+      currentDate.getMonth(),
+      1
+    );
+    const endOfMonth = new Date(
+      currentDate.getFullYear(),
+      currentDate.getMonth() + 1,
+      0
+    );
 
-    const startOfMonth = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1);
-    const endOfMonth = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0);
-
-    const { data } = await supabase
-      .from('session_participants')
-      .select(`
+    const participantsRes = await supabase
+      .from("session_participants")
+      .select(
+        `
         study_sessions (
           id,
           title,
-          scheduled_for,
+          scheduled_at,
           duration_minutes,
           study_groups (name)
         )
-      `)
-      .eq('user_id', user.id)
-      .gte('study_sessions.scheduled_for', startOfMonth.toISOString())
-      .lte('study_sessions.scheduled_for', endOfMonth.toISOString());
+      `
+      )
+      .eq("user_id", user.id)
+      .gte("study_sessions.scheduled_at", startOfMonth.toISOString())
+      .lte("study_sessions.scheduled_at", endOfMonth.toISOString());
 
-    if (data) {
-      const sessionsData = data.map((p: any) => p.study_sessions).filter(Boolean);
+    const participantsData = (
+      participantsRes as unknown as {
+        data: Array<{ study_sessions: SessionForCalendar | null }> | null;
+      }
+    ).data;
+
+    if (participantsData) {
+      const sessionsData = participantsData
+        .map((p) => p.study_sessions)
+        .filter((s): s is SessionForCalendar => s !== null);
       setSessions(sessionsData);
     }
 
     setLoading(false);
-  };
+  }, [user, currentDate]);
+
+  useEffect(() => {
+    loadSessions();
+  }, [loadSessions]);
 
   const getDaysInMonth = () => {
     const year = currentDate.getFullYear();
@@ -75,34 +93,42 @@ export function CalendarView({ onSessionClick }: CalendarViewProps) {
   };
 
   const getSessionsForDay = (day: number) => {
-    const dateStr = new Date(currentDate.getFullYear(), currentDate.getMonth(), day)
+    const dateStr = new Date(
+      currentDate.getFullYear(),
+      currentDate.getMonth(),
+      day
+    )
       .toISOString()
-      .split('T')[0];
-    return sessions.filter((s) => s.scheduled_for.startsWith(dateStr));
+      .split("T")[0];
+    return sessions.filter((s) => s.scheduled_at.startsWith(dateStr));
   };
 
   const previousMonth = () => {
-    setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() - 1));
+    setCurrentDate(
+      new Date(currentDate.getFullYear(), currentDate.getMonth() - 1)
+    );
   };
 
   const nextMonth = () => {
-    setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() + 1));
+    setCurrentDate(
+      new Date(currentDate.getFullYear(), currentDate.getMonth() + 1)
+    );
   };
 
   const days = getDaysInMonth();
   const monthNames = [
-    'January',
-    'February',
-    'March',
-    'April',
-    'May',
-    'June',
-    'July',
-    'August',
-    'September',
-    'October',
-    'November',
-    'December',
+    "January",
+    "February",
+    "March",
+    "April",
+    "May",
+    "June",
+    "July",
+    "August",
+    "September",
+    "October",
+    "November",
+    "December",
   ];
 
   if (loading) {
@@ -136,8 +162,11 @@ export function CalendarView({ onSessionClick }: CalendarViewProps) {
       </div>
 
       <div className="grid grid-cols-7 gap-2">
-        {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((day) => (
-          <div key={day} className="text-center text-sm font-semibold text-gray-600 dark:text-gray-400 py-2">
+        {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((day) => (
+          <div
+            key={day}
+            className="text-center text-sm font-semibold text-gray-600 dark:text-gray-400 py-2"
+          >
             {day}
           </div>
         ))}
@@ -153,16 +182,18 @@ export function CalendarView({ onSessionClick }: CalendarViewProps) {
             <div
               key={index}
               className={`min-h-24 p-2 border border-gray-200 dark:border-gray-700 rounded-lg ${
-                day ? 'bg-white dark:bg-gray-800' : 'bg-gray-50 dark:bg-gray-900'
-              } ${isToday ? 'ring-2 ring-blue-500' : ''}`}
+                day
+                  ? "bg-white dark:bg-gray-800"
+                  : "bg-gray-50 dark:bg-gray-900"
+              } ${isToday ? "ring-2 ring-blue-500" : ""}`}
             >
               {day && (
                 <>
                   <div
                     className={`text-sm font-medium mb-1 ${
                       isToday
-                        ? 'text-blue-600 dark:text-blue-400 font-bold'
-                        : 'text-gray-700 dark:text-gray-300'
+                        ? "text-blue-600 dark:text-blue-400 font-bold"
+                        : "text-gray-700 dark:text-gray-300"
                     }`}
                   >
                     {day}
@@ -174,12 +205,17 @@ export function CalendarView({ onSessionClick }: CalendarViewProps) {
                         onClick={() => onSessionClick(session.id)}
                         className="w-full text-left p-1 bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded text-xs hover:bg-blue-200 dark:hover:bg-blue-800 transition-colors"
                       >
-                        <div className="font-medium truncate">{session.title}</div>
+                        <div className="font-medium truncate">
+                          {session.title}
+                        </div>
                         <div className="text-[10px] opacity-75">
-                          {new Date(session.scheduled_for).toLocaleTimeString('en-US', {
-                            hour: 'numeric',
-                            minute: '2-digit',
-                          })}
+                          {new Date(session.scheduled_at).toLocaleTimeString(
+                            "en-US",
+                            {
+                              hour: "numeric",
+                              minute: "2-digit",
+                            }
+                          )}
                         </div>
                       </button>
                     ))}

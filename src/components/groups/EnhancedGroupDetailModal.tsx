@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react';
-import { supabase } from '../../lib/supabase';
-import { useAuth } from '../../contexts/AuthContext';
+import { useEffect, useState, useCallback } from "react";
+import { supabase } from "../../lib/supabase";
+import { useAuth } from "../../contexts/AuthContext";
 import {
   X,
   Users,
@@ -14,16 +14,15 @@ import {
   Trophy,
   Calendar,
   ChevronRight,
-  UserPlus,
   CheckCircle,
   XCircle,
   Clock,
   ArrowUpCircle,
   ArrowDownCircle,
   Mail,
-} from 'lucide-react';
-import { EditGroupModal } from './EditGroupModal';
-import type { StudyGroup, GroupMembership, Profile } from '../../lib/types';
+} from "lucide-react";
+import { EditGroupModal } from "./EditGroupModal";
+import type { StudyGroup, GroupMembership, Profile } from "../../lib/types";
 
 interface EnhancedGroupDetailModalProps {
   groupId: string;
@@ -40,13 +39,20 @@ type JoinRequest = {
   user: Profile;
 };
 
-type TabType = 'overview' | 'members' | 'requests' | 'invitations';
+type TabType = "overview" | "members" | "requests" | "invitations";
 
-export function EnhancedGroupDetailModal({ groupId, onClose, onUpdate, onNavigate }: EnhancedGroupDetailModalProps) {
+export function EnhancedGroupDetailModal({
+  groupId,
+  onClose,
+  onUpdate,
+  onNavigate,
+}: EnhancedGroupDetailModalProps) {
   const { user } = useAuth();
-  const [activeTab, setActiveTab] = useState<TabType>('overview');
+  const [activeTab, setActiveTab] = useState<TabType>("overview");
   const [group, setGroup] = useState<StudyGroup | null>(null);
-  const [members, setMembers] = useState<(GroupMembership & { profile: Profile })[]>([]);
+  const [members, setMembers] = useState<
+    (GroupMembership & { profile: Profile })[]
+  >([]);
   const [joinRequests, setJoinRequests] = useState<JoinRequest[]>([]);
   const [stats, setStats] = useState({
     posts: 0,
@@ -57,49 +63,67 @@ export function EnhancedGroupDetailModal({ groupId, onClose, onUpdate, onNavigat
   });
   const [loading, setLoading] = useState(true);
   const [showEditModal, setShowEditModal] = useState(false);
-  const [showInviteModal, setShowInviteModal] = useState(false);
-  const [userRole, setUserRole] = useState<string>('');
-  const [searchEmail, setSearchEmail] = useState('');
+  const [userRole, setUserRole] = useState<string>("");
+  const [searchEmail, setSearchEmail] = useState("");
   const [actionLoading, setActionLoading] = useState<string | null>(null);
 
-  useEffect(() => {
-    loadGroupDetails();
-  }, [groupId]);
-
-  const loadGroupDetails = async () => {
+  const loadGroupDetails = useCallback(async () => {
     const [groupRes, membersRes, roleRes, requestsRes] = await Promise.all([
-      supabase.from('study_groups').select('*').eq('id', groupId).maybeSingle(),
+      supabase.from("study_groups").select("*").eq("id", groupId).maybeSingle(),
       supabase
-        .from('group_memberships')
-        .select('*, profile:profiles(*)')
-        .eq('group_id', groupId)
-        .order('joined_at', { ascending: true}),
+        .from("group_memberships")
+        .select("*, profile:profiles(*)")
+        .eq("group_id", groupId)
+        .order("joined_at", { ascending: true }),
       supabase
-        .from('group_memberships')
-        .select('role')
-        .eq('group_id', groupId)
-        .eq('user_id', user?.id)
+        .from("group_memberships")
+        .select("role")
+        .eq("group_id", groupId)
+        .eq("user_id", user?.id || "")
         .maybeSingle(),
       supabase
-        .from('group_join_requests')
-        .select('*, user:profiles!user_id(*)')
-        .eq('group_id', groupId)
-        .eq('status', 'pending')
-        .order('created_at', { ascending: false }),
+        .from("group_join_requests")
+        .select("*, user:profiles!user_id(*)")
+        .eq("group_id", groupId)
+        .eq("status", "pending")
+        .order("created_at", { ascending: false }),
     ]);
 
-    if (groupRes.data) setGroup(groupRes.data);
-    if (membersRes.data) setMembers(membersRes.data as any);
-    if (roleRes.data) setUserRole(roleRes.data.role);
-    if (requestsRes.data) setJoinRequests(requestsRes.data as any);
+    if (groupRes.data) setGroup(groupRes.data as StudyGroup);
+    if (membersRes.data)
+      setMembers(membersRes.data as (GroupMembership & { profile: Profile })[]);
+    const roleData = roleRes.data as { role: string } | null;
+    if (roleData) setUserRole(roleData.role);
+    if (requestsRes.data) setJoinRequests(requestsRes.data as JoinRequest[]);
 
     // Load stats
-    const [postsCount, messagesCount, resourcesCount, quizzesCount, sessionsCount] = await Promise.all([
-      supabase.from('posts').select('*', { count: 'exact', head: true }).eq('group_id', groupId),
-      supabase.from('messages').select('*', { count: 'exact', head: true }).eq('group_id', groupId),
-      supabase.from('resources').select('*', { count: 'exact', head: true }).eq('group_id', groupId),
-      supabase.from('quizzes').select('*', { count: 'exact', head: true }).eq('group_id', groupId),
-      supabase.from('study_sessions').select('*', { count: 'exact', head: true }).eq('group_id', groupId),
+    const [
+      postsCount,
+      messagesCount,
+      resourcesCount,
+      quizzesCount,
+      sessionsCount,
+    ] = await Promise.all([
+      supabase
+        .from("posts")
+        .select("*", { count: "exact", head: true })
+        .eq("group_id", groupId),
+      supabase
+        .from("messages")
+        .select("*", { count: "exact", head: true })
+        .eq("group_id", groupId),
+      supabase
+        .from("resources")
+        .select("*", { count: "exact", head: true })
+        .eq("group_id", groupId),
+      supabase
+        .from("quizzes")
+        .select("*", { count: "exact", head: true })
+        .eq("group_id", groupId),
+      supabase
+        .from("study_sessions")
+        .select("*", { count: "exact", head: true })
+        .eq("group_id", groupId),
     ]);
 
     setStats({
@@ -111,14 +135,19 @@ export function EnhancedGroupDetailModal({ groupId, onClose, onUpdate, onNavigat
     });
 
     setLoading(false);
-  };
+  }, [groupId, user?.id]);
+
+  useEffect(() => {
+    loadGroupDetails();
+  }, [loadGroupDetails]);
 
   const handleApproveRequest = async (requestId: string) => {
     setActionLoading(requestId);
     const { error } = await supabase
-      .from('group_join_requests')
-      .update({ status: 'approved', reviewed_by: user?.id })
-      .eq('id', requestId);
+      .from("group_join_requests")
+      // @ts-expect-error - Supabase update types not properly inferred
+      .update({ status: "approved", reviewed_by: user?.id })
+      .eq("id", requestId);
 
     if (!error) {
       loadGroupDetails();
@@ -129,9 +158,10 @@ export function EnhancedGroupDetailModal({ groupId, onClose, onUpdate, onNavigat
   const handleRejectRequest = async (requestId: string) => {
     setActionLoading(requestId);
     const { error } = await supabase
-      .from('group_join_requests')
-      .update({ status: 'rejected', reviewed_by: user?.id })
-      .eq('id', requestId);
+      .from("group_join_requests")
+      // @ts-expect-error - Supabase update types not properly inferred
+      .update({ status: "rejected", reviewed_by: user?.id })
+      .eq("id", requestId);
 
     if (!error) {
       loadGroupDetails();
@@ -143,45 +173,50 @@ export function EnhancedGroupDetailModal({ groupId, onClose, onUpdate, onNavigat
     e.preventDefault();
     if (!searchEmail.trim() || !user) return;
 
-    setActionLoading('invite');
+    setActionLoading("invite");
 
     // Find user by email
     const { data: profile } = await supabase
-      .from('profiles')
-      .select('id')
-      .eq('email', searchEmail.trim())
+      .from("profiles")
+      .select("id")
+      .eq("email", searchEmail.trim())
       .maybeSingle();
 
-    if (!profile) {
-      alert('User not found');
+    const profileData = profile as { id: string } | null;
+
+    if (!profileData) {
+      alert("User not found");
       setActionLoading(null);
       return;
     }
 
     // Check if already member
     const { data: existing } = await supabase
-      .from('group_memberships')
-      .select('id')
-      .eq('group_id', groupId)
-      .eq('user_id', profile.id)
+      .from("group_memberships")
+      .select("id")
+      .eq("group_id", groupId)
+      .eq("user_id", profileData.id)
       .maybeSingle();
 
-    if (existing) {
-      alert('User is already a member');
+    const existingData = existing as { id: string } | null;
+
+    if (existingData) {
+      alert("User is already a member");
       setActionLoading(null);
       return;
     }
 
     // Create invitation
-    const { error } = await supabase.from('group_invitations').insert({
+    // @ts-expect-error - Supabase insert types not properly inferred
+    const { error } = await supabase.from("group_invitations").insert({
       group_id: groupId,
       invited_by: user.id,
-      invited_user_id: profile.id,
+      invited_user_id: profileData.id,
     });
 
     if (!error) {
-      setSearchEmail('');
-      alert('Invitation sent!');
+      setSearchEmail("");
+      alert("Invitation sent!");
     }
     setActionLoading(null);
   };
@@ -189,9 +224,10 @@ export function EnhancedGroupDetailModal({ groupId, onClose, onUpdate, onNavigat
   const handlePromoteMember = async (membershipId: string) => {
     setActionLoading(membershipId);
     const { error } = await supabase
-      .from('group_memberships')
-      .update({ role: 'admin' })
-      .eq('id', membershipId);
+      .from("group_memberships")
+      // @ts-expect-error - Supabase update types not properly inferred
+      .update({ role: "admin" })
+      .eq("id", membershipId);
 
     if (!error) {
       loadGroupDetails();
@@ -202,9 +238,10 @@ export function EnhancedGroupDetailModal({ groupId, onClose, onUpdate, onNavigat
   const handleDemoteMember = async (membershipId: string) => {
     setActionLoading(membershipId);
     const { error } = await supabase
-      .from('group_memberships')
-      .update({ role: 'member' })
-      .eq('id', membershipId);
+      .from("group_memberships")
+      // @ts-expect-error - Supabase update types not properly inferred
+      .update({ role: "member" })
+      .eq("id", membershipId);
 
     if (!error) {
       loadGroupDetails();
@@ -213,10 +250,13 @@ export function EnhancedGroupDetailModal({ groupId, onClose, onUpdate, onNavigat
   };
 
   const handleRemoveMember = async (memberId: string) => {
-    if (!confirm('Remove this member from the group?')) return;
+    if (!confirm("Remove this member from the group?")) return;
 
     setActionLoading(memberId);
-    const { error } = await supabase.from('group_memberships').delete().eq('id', memberId);
+    const { error } = await supabase
+      .from("group_memberships")
+      .delete()
+      .eq("id", memberId);
 
     if (!error) {
       loadGroupDetails();
@@ -225,9 +265,17 @@ export function EnhancedGroupDetailModal({ groupId, onClose, onUpdate, onNavigat
   };
 
   const handleDeleteGroup = async () => {
-    if (!confirm('Are you sure you want to delete this group? This action cannot be undone.')) return;
+    if (
+      !confirm(
+        "Are you sure you want to delete this group? This action cannot be undone."
+      )
+    )
+      return;
 
-    const { error } = await supabase.from('study_groups').delete().eq('id', groupId);
+    const { error } = await supabase
+      .from("study_groups")
+      .delete()
+      .eq("id", groupId);
 
     if (!error) {
       onUpdate();
@@ -236,13 +284,14 @@ export function EnhancedGroupDetailModal({ groupId, onClose, onUpdate, onNavigat
   };
 
   const handleLeaveGroup = async () => {
-    if (!confirm('Are you sure you want to leave this group?')) return;
+    if (!confirm("Are you sure you want to leave this group?")) return;
+    if (!user?.id) return;
 
     const { error } = await supabase
-      .from('group_memberships')
+      .from("group_memberships")
       .delete()
-      .eq('group_id', groupId)
-      .eq('user_id', user?.id);
+      .eq("group_id", groupId)
+      .eq("user_id", user.id);
 
     if (!error) {
       onUpdate();
@@ -267,15 +316,45 @@ export function EnhancedGroupDetailModal({ groupId, onClose, onUpdate, onNavigat
     );
   }
 
-  const isAdmin = userRole === 'admin';
+  const isAdmin = userRole === "admin";
   const isCreator = group.created_by === user?.id;
 
   const features = [
-    { id: 'posts', label: 'Posts', icon: BookOpen, count: stats.posts, color: 'text-blue-600 dark:text-blue-400' },
-    { id: 'messages', label: 'Messages', icon: MessageSquare, count: stats.messages, color: 'text-green-600 dark:text-green-400' },
-    { id: 'resources', label: 'Resources', icon: FileText, count: stats.resources, color: 'text-purple-600 dark:text-purple-400' },
-    { id: 'quizzes', label: 'Quizzes', icon: Trophy, count: stats.quizzes, color: 'text-yellow-600 dark:text-yellow-400' },
-    { id: 'sessions', label: 'Sessions', icon: Calendar, count: stats.sessions, color: 'text-red-600 dark:text-red-400' },
+    {
+      id: "posts",
+      label: "Posts",
+      icon: BookOpen,
+      count: stats.posts,
+      color: "text-blue-600 dark:text-blue-400",
+    },
+    {
+      id: "messages",
+      label: "Messages",
+      icon: MessageSquare,
+      count: stats.messages,
+      color: "text-green-600 dark:text-green-400",
+    },
+    {
+      id: "resources",
+      label: "Resources",
+      icon: FileText,
+      count: stats.resources,
+      color: "text-purple-600 dark:text-purple-400",
+    },
+    {
+      id: "quizzes",
+      label: "Quizzes",
+      icon: Trophy,
+      count: stats.quizzes,
+      color: "text-yellow-600 dark:text-yellow-400",
+    },
+    {
+      id: "sessions",
+      label: "Sessions",
+      icon: Calendar,
+      count: stats.sessions,
+      color: "text-red-600 dark:text-red-400",
+    },
   ];
 
   return (
@@ -283,7 +362,9 @@ export function EnhancedGroupDetailModal({ groupId, onClose, onUpdate, onNavigat
       <div className="bg-white dark:bg-gray-800 rounded-lg max-w-5xl w-full my-8 transition-colors">
         <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-gray-700">
           <div className="flex-1">
-            <h2 className="text-2xl font-bold text-gray-900 dark:text-white">{group.name}</h2>
+            <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
+              {group.name}
+            </h2>
             {group.subject && (
               <span className="inline-block mt-2 px-3 py-1 text-sm bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded">
                 {group.subject}
@@ -301,32 +382,32 @@ export function EnhancedGroupDetailModal({ groupId, onClose, onUpdate, onNavigat
         {/* Tabs */}
         <div className="flex gap-4 px-6 pt-4 border-b border-gray-200 dark:border-gray-700">
           <button
-            onClick={() => setActiveTab('overview')}
+            onClick={() => setActiveTab("overview")}
             className={`pb-3 px-2 font-medium transition-colors ${
-              activeTab === 'overview'
-                ? 'text-blue-600 dark:text-blue-400 border-b-2 border-blue-600 dark:border-blue-400'
-                : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
+              activeTab === "overview"
+                ? "text-blue-600 dark:text-blue-400 border-b-2 border-blue-600 dark:border-blue-400"
+                : "text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200"
             }`}
           >
             Overview
           </button>
           <button
-            onClick={() => setActiveTab('members')}
+            onClick={() => setActiveTab("members")}
             className={`pb-3 px-2 font-medium transition-colors ${
-              activeTab === 'members'
-                ? 'text-blue-600 dark:text-blue-400 border-b-2 border-blue-600 dark:border-blue-400'
-                : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
+              activeTab === "members"
+                ? "text-blue-600 dark:text-blue-400 border-b-2 border-blue-600 dark:border-blue-400"
+                : "text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200"
             }`}
           >
             Members ({members.length})
           </button>
           {isAdmin && !group.is_public && (
             <button
-              onClick={() => setActiveTab('requests')}
+              onClick={() => setActiveTab("requests")}
               className={`pb-3 px-2 font-medium transition-colors ${
-                activeTab === 'requests'
-                  ? 'text-blue-600 dark:text-blue-400 border-b-2 border-blue-600 dark:border-blue-400'
-                  : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
+                activeTab === "requests"
+                  ? "text-blue-600 dark:text-blue-400 border-b-2 border-blue-600 dark:border-blue-400"
+                  : "text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200"
               }`}
             >
               Join Requests
@@ -339,11 +420,11 @@ export function EnhancedGroupDetailModal({ groupId, onClose, onUpdate, onNavigat
           )}
           {isAdmin && (
             <button
-              onClick={() => setActiveTab('invitations')}
+              onClick={() => setActiveTab("invitations")}
               className={`pb-3 px-2 font-medium transition-colors ${
-                activeTab === 'invitations'
-                  ? 'text-blue-600 dark:text-blue-400 border-b-2 border-blue-600 dark:border-blue-400'
-                  : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
+                activeTab === "invitations"
+                  ? "text-blue-600 dark:text-blue-400 border-b-2 border-blue-600 dark:border-blue-400"
+                  : "text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200"
               }`}
             >
               Invite Members
@@ -352,26 +433,40 @@ export function EnhancedGroupDetailModal({ groupId, onClose, onUpdate, onNavigat
         </div>
 
         <div className="p-6 space-y-6 max-h-[60vh] overflow-y-auto">
-          {activeTab === 'overview' && (
+          {activeTab === "overview" && (
             <>
               <div>
-                <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400 mb-2">Description</h3>
-                <p className="text-gray-900 dark:text-white">{group.description || 'No description provided'}</p>
+                <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400 mb-2">
+                  Description
+                </h3>
+                <p className="text-gray-900 dark:text-white">
+                  {group.description || "No description provided"}
+                </p>
               </div>
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400 mb-1">Visibility</h3>
-                  <p className="text-gray-900 dark:text-white">{group.is_public ? 'Public' : 'Private'}</p>
+                  <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400 mb-1">
+                    Visibility
+                  </h3>
+                  <p className="text-gray-900 dark:text-white">
+                    {group.is_public ? "Public" : "Private"}
+                  </p>
                 </div>
                 <div>
-                  <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400 mb-1">Members</h3>
-                  <p className="text-gray-900 dark:text-white">{members.length} / {group.max_members}</p>
+                  <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400 mb-1">
+                    Members
+                  </h3>
+                  <p className="text-gray-900 dark:text-white">
+                    {members.length} / {group.max_members}
+                  </p>
                 </div>
               </div>
 
               <div>
-                <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-3">Group Content</h3>
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-3">
+                  Group Content
+                </h3>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   {features.map((feature) => {
                     const Icon = feature.icon;
@@ -384,9 +479,12 @@ export function EnhancedGroupDetailModal({ groupId, onClose, onUpdate, onNavigat
                         <div className="flex items-center gap-3">
                           <Icon className={`w-5 h-5 ${feature.color}`} />
                           <div className="text-left">
-                            <p className="font-medium text-gray-900 dark:text-white">{feature.label}</p>
+                            <p className="font-medium text-gray-900 dark:text-white">
+                              {feature.label}
+                            </p>
                             <p className="text-sm text-gray-500 dark:text-gray-400">
-                              {feature.count} {feature.count === 1 ? 'item' : 'items'}
+                              {feature.count}{" "}
+                              {feature.count === 1 ? "item" : "items"}
                             </p>
                           </div>
                         </div>
@@ -399,7 +497,7 @@ export function EnhancedGroupDetailModal({ groupId, onClose, onUpdate, onNavigat
             </>
           )}
 
-          {activeTab === 'members' && (
+          {activeTab === "members" && (
             <div className="space-y-2">
               {members.map((member) => (
                 <div
@@ -412,13 +510,15 @@ export function EnhancedGroupDetailModal({ groupId, onClose, onUpdate, onNavigat
                     </div>
                     <div>
                       <p className="font-medium text-gray-900 dark:text-white">
-                        {member.profile?.full_name || member.profile?.email || 'Unknown'}
+                        {member.profile?.full_name ||
+                          member.profile?.email ||
+                          "Unknown"}
                       </p>
                       <div className="flex items-center gap-2">
                         <span className="text-xs text-gray-500 dark:text-gray-400">
                           {new Date(member.joined_at).toLocaleDateString()}
                         </span>
-                        {member.role === 'admin' && (
+                        {member.role === "admin" && (
                           <span className="flex items-center gap-1 text-xs bg-purple-100 dark:bg-purple-900 text-purple-700 dark:text-purple-300 px-2 py-0.5 rounded">
                             <Crown className="w-3 h-3" />
                             Admin
@@ -429,7 +529,7 @@ export function EnhancedGroupDetailModal({ groupId, onClose, onUpdate, onNavigat
                   </div>
                   {isAdmin && member.user_id !== user?.id && (
                     <div className="flex gap-2">
-                      {member.role === 'member' ? (
+                      {member.role === "member" ? (
                         <button
                           onClick={() => handlePromoteMember(member.id)}
                           disabled={actionLoading === member.id}
@@ -463,7 +563,7 @@ export function EnhancedGroupDetailModal({ groupId, onClose, onUpdate, onNavigat
             </div>
           )}
 
-          {activeTab === 'requests' && (
+          {activeTab === "requests" && (
             <div className="space-y-4">
               {joinRequests.length === 0 ? (
                 <div className="text-center py-8 text-gray-500 dark:text-gray-400">
@@ -485,7 +585,8 @@ export function EnhancedGroupDetailModal({ groupId, onClose, onUpdate, onNavigat
                           {request.user.full_name || request.user.email}
                         </p>
                         <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                          Requested {new Date(request.created_at).toLocaleDateString()}
+                          Requested{" "}
+                          {new Date(request.created_at).toLocaleDateString()}
                         </p>
                         {request.message && (
                           <p className="text-sm text-gray-700 dark:text-gray-300 mt-2 p-2 bg-white dark:bg-gray-600 rounded">
@@ -516,7 +617,7 @@ export function EnhancedGroupDetailModal({ groupId, onClose, onUpdate, onNavigat
             </div>
           )}
 
-          {activeTab === 'invitations' && (
+          {activeTab === "invitations" && (
             <div>
               <form onSubmit={handleInviteMember} className="space-y-4">
                 <div>
@@ -533,7 +634,9 @@ export function EnhancedGroupDetailModal({ groupId, onClose, onUpdate, onNavigat
                     />
                     <button
                       type="submit"
-                      disabled={actionLoading === 'invite' || !searchEmail.trim()}
+                      disabled={
+                        actionLoading === "invite" || !searchEmail.trim()
+                      }
                       className="flex items-center gap-2 px-4 py-2 bg-blue-600 dark:bg-blue-500 text-white rounded-lg hover:bg-blue-700 dark:hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       <Mail className="w-5 h-5" />

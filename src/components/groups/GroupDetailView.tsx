@@ -1,19 +1,11 @@
-import { useEffect, useState } from 'react';
-import { supabase } from '../../lib/supabase';
-import { useAuth } from '../../contexts/AuthContext';
-import { X, Users, Calendar, Edit2, Trash2, LogOut, UserPlus, Shield, Crown } from 'lucide-react';
-import { EditGroupModal } from './EditGroupModal';
+import { useCallback, useEffect, useState } from "react";
+import { supabase } from "../../lib/supabase";
+import { useAuth } from "../../contexts/AuthContext";
+import { X, Users, Edit2, Trash2, LogOut, Crown } from "lucide-react";
+import { EditGroupModal } from "./EditGroupModal";
+import type { StudyGroup } from "../../lib/types";
 
-interface Group {
-  id: string;
-  name: string;
-  description: string;
-  subject: string;
-  is_public: boolean;
-  max_members: number;
-  created_at: string;
-  created_by: string;
-}
+// Using centralized StudyGroup type from lib/types
 
 interface Member {
   id: string;
@@ -32,45 +24,65 @@ interface GroupDetailViewProps {
   onUpdate: () => void;
 }
 
-export function GroupDetailView({ groupId, onClose, onUpdate }: GroupDetailViewProps) {
+export function GroupDetailView({
+  groupId,
+  onClose,
+  onUpdate,
+}: GroupDetailViewProps) {
   const { user } = useAuth();
-  const [group, setGroup] = useState<Group | null>(null);
+  const [group, setGroup] = useState<StudyGroup | null>(null);
   const [members, setMembers] = useState<Member[]>([]);
   const [loading, setLoading] = useState(true);
   const [showEditModal, setShowEditModal] = useState(false);
-  const [userRole, setUserRole] = useState<string>('');
+  const [userRole, setUserRole] = useState<string>("");
+
+  const loadGroupDetails = useCallback(async () => {
+    const groupRes = await supabase
+      .from("study_groups")
+      .select("*")
+      .eq("id", groupId)
+      .single();
+    const membersRes = await supabase
+      .from("group_memberships")
+      .select("id, user_id, role, joined_at")
+      .eq("group_id", groupId)
+      .order("joined_at", { ascending: true });
+
+    const groupData = groupRes.data as StudyGroup | null;
+    if (groupData) setGroup(groupData);
+    if (membersRes.data) setMembers((membersRes.data as Member[]) || []);
+
+    if (user?.id) {
+      const roleRes = await supabase
+        .from("group_memberships")
+        .select("role")
+        .eq("group_id", groupId)
+        .eq("user_id", user.id)
+        .maybeSingle();
+      if (roleRes.data) setUserRole((roleRes.data as { role: string }).role);
+    } else {
+      setUserRole("");
+    }
+
+    setLoading(false);
+  }, [groupId, user?.id]);
 
   useEffect(() => {
     loadGroupDetails();
-  }, [groupId]);
-
-  const loadGroupDetails = async () => {
-    const [groupRes, membersRes, roleRes] = await Promise.all([
-      supabase.from('study_groups').select('*').eq('id', groupId).single(),
-      supabase
-        .from('group_memberships')
-        .select('id, user_id, role, joined_at')
-        .eq('group_id', groupId)
-        .order('joined_at', { ascending: true }),
-      supabase
-        .from('group_memberships')
-        .select('role')
-        .eq('group_id', groupId)
-        .eq('user_id', user?.id)
-        .maybeSingle(),
-    ]);
-
-    if (groupRes.data) setGroup(groupRes.data);
-    if (membersRes.data) setMembers(membersRes.data);
-    if (roleRes.data) setUserRole(roleRes.data.role);
-
-    setLoading(false);
-  };
+  }, [loadGroupDetails]);
 
   const handleDeleteGroup = async () => {
-    if (!confirm('Are you sure you want to delete this group? This action cannot be undone.')) return;
+    if (
+      !confirm(
+        "Are you sure you want to delete this group? This action cannot be undone."
+      )
+    )
+      return;
 
-    const { error } = await supabase.from('study_groups').delete().eq('id', groupId);
+    const { error } = await supabase
+      .from("study_groups")
+      .delete()
+      .eq("id", groupId);
 
     if (!error) {
       onUpdate();
@@ -79,13 +91,15 @@ export function GroupDetailView({ groupId, onClose, onUpdate }: GroupDetailViewP
   };
 
   const handleLeaveGroup = async () => {
-    if (!confirm('Are you sure you want to leave this group?')) return;
+    if (!confirm("Are you sure you want to leave this group?")) return;
+
+    if (!user?.id) return;
 
     const { error } = await supabase
-      .from('group_memberships')
+      .from("group_memberships")
       .delete()
-      .eq('group_id', groupId)
-      .eq('user_id', user?.id);
+      .eq("group_id", groupId)
+      .eq("user_id", user.id);
 
     if (!error) {
       onUpdate();
@@ -94,9 +108,12 @@ export function GroupDetailView({ groupId, onClose, onUpdate }: GroupDetailViewP
   };
 
   const handleRemoveMember = async (memberId: string) => {
-    if (!confirm('Remove this member from the group?')) return;
+    if (!confirm("Remove this member from the group?")) return;
 
-    const { error } = await supabase.from('group_memberships').delete().eq('id', memberId);
+    const { error } = await supabase
+      .from("group_memberships")
+      .delete()
+      .eq("id", memberId);
 
     if (!error) {
       loadGroupDetails();
@@ -105,9 +122,10 @@ export function GroupDetailView({ groupId, onClose, onUpdate }: GroupDetailViewP
 
   const handleChangeRole = async (memberId: string, newRole: string) => {
     const { error } = await supabase
-      .from('group_memberships')
+      .from("group_memberships")
+      // @ts-expect-error - Supabase update types not properly inferred
       .update({ role: newRole })
-      .eq('id', memberId);
+      .eq("id", memberId);
 
     if (!error) {
       loadGroupDetails();
@@ -126,7 +144,7 @@ export function GroupDetailView({ groupId, onClose, onUpdate }: GroupDetailViewP
     );
   }
 
-  const isAdmin = userRole === 'admin';
+  const isAdmin = userRole === "admin";
   const isCreator = group.created_by === user?.id;
 
   return (
@@ -134,7 +152,9 @@ export function GroupDetailView({ groupId, onClose, onUpdate }: GroupDetailViewP
       <div className="bg-white dark:bg-gray-800 rounded-lg max-w-4xl w-full p-6 my-8 transition-colors">
         <div className="flex items-center justify-between mb-6">
           <div className="flex-1">
-            <h2 className="text-2xl font-bold text-gray-900 dark:text-white">{group.name}</h2>
+            <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
+              {group.name}
+            </h2>
             {group.subject && (
               <span className="inline-block mt-2 px-3 py-1 text-sm bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded">
                 {group.subject}
@@ -151,18 +171,30 @@ export function GroupDetailView({ groupId, onClose, onUpdate }: GroupDetailViewP
 
         <div className="space-y-6">
           <div>
-            <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400 mb-2">Description</h3>
-            <p className="text-gray-900 dark:text-white">{group.description || 'No description provided'}</p>
+            <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400 mb-2">
+              Description
+            </h3>
+            <p className="text-gray-900 dark:text-white">
+              {group.description || "No description provided"}
+            </p>
           </div>
 
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400 mb-1">Visibility</h3>
-              <p className="text-gray-900 dark:text-white">{group.is_public ? 'Public' : 'Private'}</p>
+              <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400 mb-1">
+                Visibility
+              </h3>
+              <p className="text-gray-900 dark:text-white">
+                {group.is_public ? "Public" : "Private"}
+              </p>
             </div>
             <div>
-              <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400 mb-1">Max Members</h3>
-              <p className="text-gray-900 dark:text-white">{group.max_members}</p>
+              <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400 mb-1">
+                Max Members
+              </h3>
+              <p className="text-gray-900 dark:text-white">
+                {group.max_members}
+              </p>
             </div>
           </div>
 
@@ -191,7 +223,7 @@ export function GroupDetailView({ groupId, onClose, onUpdate }: GroupDetailViewP
                         <span className="text-xs text-gray-500 dark:text-gray-400">
                           {new Date(member.joined_at).toLocaleDateString()}
                         </span>
-                        {member.role === 'admin' && (
+                        {member.role === "admin" && (
                           <span className="flex items-center gap-1 text-xs bg-purple-100 dark:bg-purple-900 text-purple-700 dark:text-purple-300 px-2 py-0.5 rounded">
                             <Crown className="w-3 h-3" />
                             Admin
@@ -204,7 +236,9 @@ export function GroupDetailView({ groupId, onClose, onUpdate }: GroupDetailViewP
                     <div className="flex items-center gap-2">
                       <select
                         value={member.role}
-                        onChange={(e) => handleChangeRole(member.id, e.target.value)}
+                        onChange={(e) =>
+                          handleChangeRole(member.id, e.target.value)
+                        }
                         className="text-sm px-2 py-1 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-white rounded"
                       >
                         <option value="member">Member</option>

@@ -1,19 +1,51 @@
-import { Database } from './database.types';
+import { Database } from "./database.types";
 
-export type Tables<T extends keyof Database['public']['Tables']> = Database['public']['Tables'][T]['Row'];
-export type Inserts<T extends keyof Database['public']['Tables']> = Database['public']['Tables'][T]['Insert'];
-export type Updates<T extends keyof Database['public']['Tables']> = Database['public']['Tables'][T]['Update'];
+export type Tables<T extends keyof Database["public"]["Tables"]> =
+  Database["public"]["Tables"][T]["Row"];
+export type Inserts<T extends keyof Database["public"]["Tables"]> =
+  Database["public"]["Tables"][T]["Insert"];
+export type Updates<T extends keyof Database["public"]["Tables"]> =
+  Database["public"]["Tables"][T]["Update"];
 
-export type Profile = Tables<'profiles'>;
-export type StudyGroup = Tables<'study_groups'>;
-export type GroupMembership = Tables<'group_memberships'>;
-export type StudySession = Tables<'study_sessions'>;
-export type SessionParticipant = Tables<'session_participants'>;
-export type Message = Tables<'messages'>;
-export type Resource = Tables<'resources'>;
-export type Quiz = Tables<'quizzes'>;
-export type QuizQuestion = Tables<'quiz_questions'>;
-export type QuizAttempt = Tables<'quiz_attempts'>;
+export type Profile = Tables<"profiles">;
+export type StudyGroup = Tables<"study_groups">;
+export type GroupMembership = Tables<"group_memberships">;
+export type StudySession = Tables<"study_sessions">;
+export type SessionParticipant = Tables<"session_participants">;
+export type Message = Tables<"messages">;
+export type Resource = Tables<"resources">;
+export type Quiz = Tables<"quizzes">;
+export type QuizQuestion = Tables<"quiz_questions">;
+export type QuizAttempt = Tables<"quiz_attempts">;
+
+// Session chat and poll types (not in generated schema)
+export type SessionChat = {
+  id: string;
+  session_id: string;
+  user_id: string;
+  message: string;
+  message_type: string;
+  created_at: string;
+};
+
+export type SessionPoll = {
+  id: string;
+  session_id: string;
+  created_by: string;
+  question: string;
+  options: unknown; // JSON field
+  is_active: boolean;
+  allow_multiple: boolean;
+  created_at: string;
+};
+
+export type SessionPollResponse = {
+  id: string;
+  poll_id: string;
+  user_id: string;
+  selected_options: unknown; // JSON field
+  created_at: string;
+};
 
 export type Notification = {
   id: string;
@@ -92,7 +124,12 @@ export type Post = {
   author_id: string;
   title: string;
   content: string;
-  post_type: 'question' | 'discussion' | 'article' | 'announcement' | 'solution';
+  post_type:
+    | "question"
+    | "discussion"
+    | "article"
+    | "announcement"
+    | "solution";
   is_pinned: boolean;
   created_at: string;
   updated_at: string;
@@ -103,7 +140,7 @@ export type PostReaction = {
   id: string;
   post_id: string;
   user_id: string;
-  reaction_type: 'like' | 'helpful' | 'insightful' | 'love';
+  reaction_type: "like" | "helpful" | "insightful" | "love";
   created_at: string;
 };
 
@@ -122,7 +159,7 @@ export type CommentReaction = {
   id: string;
   comment_id: string;
   user_id: string;
-  reaction_type: 'like' | 'helpful';
+  reaction_type: "like" | "helpful";
   created_at: string;
 };
 
@@ -147,3 +184,17 @@ export type CommentWithDetails = Comment & {
   };
   user_reaction?: CommentReaction | null;
 };
+
+export type Connection = {
+  id: string;
+  requester_id: string;
+  recipient_id: string;
+  status: string;
+  created_at: string;
+};
+
+export type ConnectionStatus =
+  | "none"
+  | "pending_sent"
+  | "pending_received"
+  | "connected";

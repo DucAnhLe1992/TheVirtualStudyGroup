@@ -1,55 +1,61 @@
-import { useState } from 'react';
-import { supabase } from '../../lib/supabase';
-import { useAuth } from '../../contexts/AuthContext';
-import { X, AlertCircle, Upload, Link as LinkIcon } from 'lucide-react';
-
-interface Group {
-  id: string;
-  name: string;
-}
+import { useState } from "react";
+import { supabase } from "../../lib/supabase";
+import { useAuth } from "../../contexts/AuthContext";
+import { X, AlertCircle, Link as LinkIcon } from "lucide-react";
+import type { StudyGroup } from "../../lib/types";
 
 interface UploadResourceModalProps {
-  groups: Group[];
+  groups: StudyGroup[];
   onClose: () => void;
   onSuccess: () => void;
 }
 
-export function UploadResourceModal({ groups, onClose, onSuccess }: UploadResourceModalProps) {
+export function UploadResourceModal({
+  groups,
+  onClose,
+  onSuccess,
+}: UploadResourceModalProps) {
   const { user } = useAuth();
-  const [title, setTitle] = useState('');
-  const [description, setDescription] = useState('');
-  const [groupId, setGroupId] = useState('');
-  const [uploadType, setUploadType] = useState<'link' | 'file'>('link');
-  const [fileUrl, setFileUrl] = useState('');
-  const [error, setError] = useState('');
+  const [title, setTitle] = useState("");
+  const [description, setDescription] = useState("");
+  const [groupId, setGroupId] = useState("");
+  const [uploadType, setUploadType] = useState<"link" | "file">("link");
+  const [fileUrl, setFileUrl] = useState("");
+  const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError('');
+    setError("");
 
-    if (!groupId) {
-      setError('Please select a group');
+    if (!user?.id) {
+      setError("You must be signed in to upload resources");
       return;
     }
 
-    if (uploadType === 'link' && !fileUrl) {
-      setError('Please provide a file URL');
+    if (!groupId) {
+      setError("Please select a group");
+      return;
+    }
+
+    if (uploadType === "link" && !fileUrl) {
+      setError("Please provide a file URL");
       return;
     }
 
     setLoading(true);
 
-    const fileType = fileUrl.split('.').pop()?.toLowerCase() || 'unknown';
+    const fileType = fileUrl.split(".").pop()?.toLowerCase() || "unknown";
 
-    const { error: insertError } = await supabase.from('resources').insert({
+    // @ts-expect-error - Supabase insert types not properly inferred
+    const { error: insertError } = await supabase.from("resources").insert({
       title,
       description,
       file_type: fileType,
       file_url: fileUrl,
       file_size: 0,
       group_id: groupId,
-      uploaded_by: user?.id,
+      uploaded_by: user.id,
     });
 
     if (insertError) {
@@ -66,7 +72,9 @@ export function UploadResourceModal({ groups, onClose, onSuccess }: UploadResour
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50 overflow-y-auto">
       <div className="bg-white dark:bg-gray-800 rounded-lg max-w-lg w-full p-6 my-8 transition-colors">
         <div className="flex items-center justify-between mb-6">
-          <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Upload Resource</h2>
+          <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
+            Upload Resource
+          </h2>
           <button
             onClick={onClose}
             className="text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
@@ -84,7 +92,10 @@ export function UploadResourceModal({ groups, onClose, onSuccess }: UploadResour
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label htmlFor="title" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+            <label
+              htmlFor="title"
+              className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
+            >
               Resource Title *
             </label>
             <input
@@ -99,7 +110,10 @@ export function UploadResourceModal({ groups, onClose, onSuccess }: UploadResour
           </div>
 
           <div>
-            <label htmlFor="group" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+            <label
+              htmlFor="group"
+              className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
+            >
               Study Group *
             </label>
             <select
@@ -125,24 +139,39 @@ export function UploadResourceModal({ groups, onClose, onSuccess }: UploadResour
             <div className="flex gap-4">
               <button
                 type="button"
-                onClick={() => setUploadType('link')}
+                onClick={() => setUploadType("link")}
                 className={`flex-1 p-3 rounded-lg border-2 transition-colors ${
-                  uploadType === 'link'
-                    ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
-                    : 'border-gray-300 dark:border-gray-600 hover:border-gray-400 dark:hover:border-gray-500'
+                  uploadType === "link"
+                    ? "border-blue-500 bg-blue-50 dark:bg-blue-900/20"
+                    : "border-gray-300 dark:border-gray-600 hover:border-gray-400 dark:hover:border-gray-500"
                 }`}
               >
-                <LinkIcon className={`w-5 h-5 mx-auto mb-1 ${uploadType === 'link' ? 'text-blue-600 dark:text-blue-400' : 'text-gray-600 dark:text-gray-400'}`} />
-                <p className={`text-sm font-medium ${uploadType === 'link' ? 'text-blue-600 dark:text-blue-400' : 'text-gray-700 dark:text-gray-300'}`}>
+                <LinkIcon
+                  className={`w-5 h-5 mx-auto mb-1 ${
+                    uploadType === "link"
+                      ? "text-blue-600 dark:text-blue-400"
+                      : "text-gray-600 dark:text-gray-400"
+                  }`}
+                />
+                <p
+                  className={`text-sm font-medium ${
+                    uploadType === "link"
+                      ? "text-blue-600 dark:text-blue-400"
+                      : "text-gray-700 dark:text-gray-300"
+                  }`}
+                >
                   Link to File
                 </p>
               </button>
             </div>
           </div>
 
-          {uploadType === 'link' && (
+          {uploadType === "link" && (
             <div>
-              <label htmlFor="fileUrl" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+              <label
+                htmlFor="fileUrl"
+                className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
+              >
                 File URL *
               </label>
               <input
@@ -155,13 +184,17 @@ export function UploadResourceModal({ groups, onClose, onSuccess }: UploadResour
                 placeholder="https://example.com/document.pdf"
               />
               <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                Link to a file hosted on Google Drive, Dropbox, or any public URL
+                Link to a file hosted on Google Drive, Dropbox, or any public
+                URL
               </p>
             </div>
           )}
 
           <div>
-            <label htmlFor="description" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+            <label
+              htmlFor="description"
+              className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
+            >
               Description
             </label>
             <textarea
@@ -187,7 +220,7 @@ export function UploadResourceModal({ groups, onClose, onSuccess }: UploadResour
               disabled={loading}
               className="flex-1 px-4 py-2 bg-blue-600 dark:bg-blue-500 text-white rounded-lg hover:bg-blue-700 dark:hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             >
-              {loading ? 'Uploading...' : 'Upload Resource'}
+              {loading ? "Uploading..." : "Upload Resource"}
             </button>
           </div>
         </form>

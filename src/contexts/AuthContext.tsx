@@ -1,14 +1,23 @@
-import { createContext, useContext, useEffect, useState } from 'react';
-import { User, Session, AuthError, Provider } from '@supabase/supabase-js';
-import { supabase } from '../lib/supabase';
+import { createContext, useContext, useEffect, useState } from "react";
+import { User, Session, AuthError, Provider } from "@supabase/supabase-js";
+import { supabase } from "../lib/supabase";
 
 interface AuthContextType {
   user: User | null;
   session: Session | null;
   loading: boolean;
-  signUp: (email: string, password: string, fullName: string) => Promise<{ error: AuthError | null }>;
-  signIn: (email: string, password: string) => Promise<{ error: AuthError | null }>;
-  signInWithProvider: (provider: Provider) => Promise<{ error: AuthError | null }>;
+  signUp: (
+    email: string,
+    password: string,
+    fullName: string
+  ) => Promise<{ error: AuthError | null }>;
+  signIn: (
+    email: string,
+    password: string
+  ) => Promise<{ error: AuthError | null }>;
+  signInWithProvider: (
+    provider: Provider
+  ) => Promise<{ error: AuthError | null }>;
   signOut: () => Promise<void>;
 }
 
@@ -26,24 +35,30 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setLoading(false);
     });
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
       (async () => {
         setSession(session);
         setUser(session?.user ?? null);
 
-        if (session?.user && _event === 'SIGNED_IN') {
+        if (session?.user && _event === "SIGNED_IN") {
           const { data: existingProfile } = await supabase
-            .from('profiles')
-            .select('id')
-            .eq('id', session.user.id)
+            .from("profiles")
+            .select("id")
+            .eq("id", session.user.id)
             .maybeSingle();
 
           if (!existingProfile) {
-            await supabase.from('profiles').insert({
+            // @ts-expect-error - Supabase insert types not properly inferred
+            await supabase.from("profiles").insert({
               id: session.user.id,
               email: session.user.email!,
-              full_name: session.user.user_metadata?.full_name || session.user.email?.split('@')[0] || '',
-              avatar_url: session.user.user_metadata?.avatar_url || '',
+              full_name:
+                session.user.user_metadata?.full_name ||
+                session.user.email?.split("@")[0] ||
+                "",
+              avatar_url: session.user.user_metadata?.avatar_url || "",
             });
           }
         }
@@ -61,7 +76,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     if (!error && data.user) {
       const { error: profileError } = await supabase
-        .from('profiles')
+        .from("profiles")
+        // @ts-expect-error - Supabase insert types not properly inferred
         .insert({
           id: data.user.id,
           email: data.user.email!,
@@ -111,10 +127,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 
+// eslint-disable-next-line react-refresh/only-export-components
 export function useAuth() {
   const context = useContext(AuthContext);
   if (context === undefined) {
-    throw new Error('useAuth must be used within an AuthProvider');
+    throw new Error("useAuth must be used within an AuthProvider");
   }
   return context;
 }

@@ -1,6 +1,6 @@
-import { useState } from 'react';
-import { supabase } from '../../lib/supabase';
-import { X, AlertCircle } from 'lucide-react';
+import { useState } from "react";
+import { supabase } from "../../lib/supabase";
+import { X, AlertCircle } from "lucide-react";
 
 interface Group {
   id: string;
@@ -17,22 +17,27 @@ interface EditGroupModalProps {
   onSuccess: () => void;
 }
 
-export function EditGroupModal({ group, onClose, onSuccess }: EditGroupModalProps) {
+export function EditGroupModal({
+  group,
+  onClose,
+  onSuccess,
+}: EditGroupModalProps) {
   const [name, setName] = useState(group.name);
   const [description, setDescription] = useState(group.description);
   const [subject, setSubject] = useState(group.subject);
   const [isPublic, setIsPublic] = useState(group.is_public);
   const [maxMembers, setMaxMembers] = useState(group.max_members);
-  const [error, setError] = useState('');
+  const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError('');
+    setError("");
     setLoading(true);
 
     const { error: updateError } = await supabase
-      .from('study_groups')
+      .from("study_groups")
+      // @ts-expect-error - Supabase update types not properly inferred
       .update({
         name,
         description,
@@ -40,7 +45,7 @@ export function EditGroupModal({ group, onClose, onSuccess }: EditGroupModalProp
         is_public: isPublic,
         max_members: maxMembers,
       })
-      .eq('id', group.id);
+      .eq("id", group.id);
 
     if (updateError) {
       setError(updateError.message);
@@ -56,7 +61,9 @@ export function EditGroupModal({ group, onClose, onSuccess }: EditGroupModalProp
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-[60]">
       <div className="bg-white dark:bg-gray-800 rounded-lg max-w-lg w-full p-6 transition-colors">
         <div className="flex items-center justify-between mb-6">
-          <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Edit Study Group</h2>
+          <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
+            Edit Study Group
+          </h2>
           <button
             onClick={onClose}
             className="text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
@@ -74,7 +81,10 @@ export function EditGroupModal({ group, onClose, onSuccess }: EditGroupModalProp
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label htmlFor="name" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+            <label
+              htmlFor="name"
+              className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
+            >
               Group Name *
             </label>
             <input
@@ -88,7 +98,10 @@ export function EditGroupModal({ group, onClose, onSuccess }: EditGroupModalProp
           </div>
 
           <div>
-            <label htmlFor="subject" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+            <label
+              htmlFor="subject"
+              className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
+            >
               Subject
             </label>
             <input
@@ -101,7 +114,10 @@ export function EditGroupModal({ group, onClose, onSuccess }: EditGroupModalProp
           </div>
 
           <div>
-            <label htmlFor="description" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+            <label
+              htmlFor="description"
+              className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
+            >
               Description
             </label>
             <textarea
@@ -114,7 +130,10 @@ export function EditGroupModal({ group, onClose, onSuccess }: EditGroupModalProp
           </div>
 
           <div>
-            <label htmlFor="maxMembers" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+            <label
+              htmlFor="maxMembers"
+              className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
+            >
               Maximum Members
             </label>
             <input
@@ -136,7 +155,10 @@ export function EditGroupModal({ group, onClose, onSuccess }: EditGroupModalProp
               onChange={(e) => setIsPublic(e.target.checked)}
               className="w-4 h-4 text-blue-600 border-gray-300 dark:border-gray-600 rounded focus:ring-blue-500 dark:focus:ring-blue-400"
             />
-            <label htmlFor="isPublic" className="text-sm text-gray-700 dark:text-gray-300">
+            <label
+              htmlFor="isPublic"
+              className="text-sm text-gray-700 dark:text-gray-300"
+            >
               Make this group public (anyone can join)
             </label>
           </div>
@@ -154,7 +176,7 @@ export function EditGroupModal({ group, onClose, onSuccess }: EditGroupModalProp
               disabled={loading}
               className="flex-1 px-4 py-2 bg-blue-600 dark:bg-blue-500 text-white rounded-lg hover:bg-blue-700 dark:hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             >
-              {loading ? 'Saving...' : 'Save Changes'}
+              {loading ? "Saving..." : "Save Changes"}
             </button>
           </div>
         </form>

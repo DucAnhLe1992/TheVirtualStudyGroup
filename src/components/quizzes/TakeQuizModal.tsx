@@ -1,14 +1,19 @@
-import { useState, useEffect } from 'react';
-import { supabase } from '../../lib/supabase';
-import { useAuth } from '../../contexts/AuthContext';
-import { X, Check } from 'lucide-react';
+import { useState, useEffect, useCallback } from "react";
+import { supabase } from "../../lib/supabase";
+import { useAuth } from "../../contexts/AuthContext";
+import { X, Check } from "lucide-react";
+import type { Quiz, QuizQuestion } from "../../lib/types";
 
-interface Question {
+type QuizWithGroup = Quiz & {
+  study_groups: { name: string };
+};
+
+type QuizQuestionUI = {
   id: string;
   question_text: string;
   options: string[];
   correct_answer: number;
-}
+};
 
 interface TakeQuizModalProps {
   quizId: string;
@@ -16,31 +21,67 @@ interface TakeQuizModalProps {
   onComplete: () => void;
 }
 
-export function TakeQuizModal({ quizId, onClose, onComplete }: TakeQuizModalProps) {
+export function TakeQuizModal({
+  quizId,
+  onClose,
+  onComplete,
+}: TakeQuizModalProps) {
   const { user } = useAuth();
-  const [quiz, setQuiz] = useState<any>(null);
-  const [questions, setQuestions] = useState<Question[]>([]);
+  const [quiz, setQuiz] = useState<QuizWithGroup | null>(null);
+  const [questions, setQuestions] = useState<QuizQuestionUI[]>([]);
   const [answers, setAnswers] = useState<{ [key: string]: number }>({});
   const [submitted, setSubmitted] = useState(false);
   const [score, setScore] = useState(0);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    loadQuiz();
-  }, [quizId]);
-
-  const loadQuiz = async () => {
+  const loadQuiz = useCallback(async () => {
     const [quizRes, questionsRes] = await Promise.all([
-      supabase.from('quizzes').select('*, study_groups(name)').eq('id', quizId).single(),
-      supabase.from('quiz_questions').select('*').eq('quiz_id', quizId),
+      supabase
+        .from("quizzes")
+        .select("*, study_groups(name)")
+        .eq("id", quizId)
+        .single(),
+      supabase
+        .from("quiz_questions")
+        .select("*")
+        .eq("quiz_id", quizId)
+        .order("order_index"),
     ]);
 
-    if (quizRes.data) setQuiz(quizRes.data);
-    if (questionsRes.data) setQuestions(questionsRes.data);
+    const quizData = (quizRes as unknown as { data: QuizWithGroup | null })
+      .data;
+    if (quizData) setQuiz(quizData);
+
+    const questionsData = (
+      questionsRes as unknown as { data: QuizQuestion[] | null }
+    ).data;
+    if (questionsData) {
+      const uiQuestions: QuizQuestionUI[] = questionsData.map((q) => {
+        const opts = (q.options as unknown as string[]) ?? [];
+        const ansRaw = q.correct_answer as unknown;
+        const ans =
+          typeof ansRaw === "string"
+            ? parseInt(ansRaw, 10)
+            : (ansRaw as number) ?? 0;
+        return {
+          id: q.id,
+          question_text: q.question_text,
+          options: Array.isArray(opts) ? opts.map((o) => String(o ?? "")) : [],
+          correct_answer: Number.isFinite(ans) ? ans : 0,
+        };
+      });
+      setQuestions(uiQuestions);
+    }
     setLoading(false);
-  };
+  }, [quizId]);
+
+  useEffect(() => {
+    loadQuiz();
+  }, [loadQuiz]);
 
   const handleSubmit = async () => {
+    if (!user?.id) return;
+
     let correctCount = 0;
     questions.forEach((q) => {
       if (answers[q.id] === q.correct_answer) {
@@ -51,11 +92,15 @@ export function TakeQuizModal({ quizId, onClose, onComplete }: TakeQuizModalProp
     const scorePercentage = Math.round((correctCount / questions.length) * 100);
     setScore(scorePercentage);
 
-    await supabase.from('quiz_attempts').insert({
+    // @ts-expect-error - Supabase insert types not properly inferred
+    await supabase.from("quiz_attempts").insert({
       quiz_id: quizId,
-      user_id: user?.id,
+      user_id: user.id,
       score: scorePercentage,
-      answers: answers,
+      total_points: questions.length,
+      answers: answers as unknown as never,
+      started_at: new Date().toISOString(),
+      completed_at: new Date().toISOString(),
     });
 
     setSubmitted(true);
@@ -81,10 +126,15 @@ export function TakeQuizModal({ quizId, onClose, onComplete }: TakeQuizModalProp
             <div className="w-16 h-16 bg-green-100 dark:bg-green-900 rounded-full flex items-center justify-center mx-auto mb-4">
               <Check className="w-8 h-8 text-green-600 dark:text-green-400" />
             </div>
-            <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">Quiz Complete!</h2>
-            <p className="text-4xl font-bold text-blue-600 dark:text-blue-400 mb-4">{score}%</p>
+            <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">
+              Quiz Complete!
+            </h2>
+            <p className="text-4xl font-bold text-blue-600 dark:text-blue-400 mb-4">
+              {score}%
+            </p>
             <p className="text-gray-600 dark:text-gray-400 mb-6">
-              You got {Math.round((score / 100) * questions.length)} out of {questions.length} questions correct
+              You got {Math.round((score / 100) * questions.length)} out of{" "}
+              {questions.length} questions correct
             </p>
             <button
               onClick={() => {
@@ -106,8 +156,12 @@ export function TakeQuizModal({ quizId, onClose, onComplete }: TakeQuizModalProp
       <div className="bg-white dark:bg-gray-800 rounded-lg max-w-3xl w-full p-6 my-8 transition-colors max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between mb-6">
           <div>
-            <h2 className="text-2xl font-bold text-gray-900 dark:text-white">{quiz.title}</h2>
-            <p className="text-sm text-gray-500 dark:text-gray-400">{quiz.study_groups.name}</p>
+            <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
+              {quiz.title}
+            </h2>
+            <p className="text-sm text-gray-500 dark:text-gray-400">
+              {quiz.study_groups.name}
+            </p>
           </div>
           <button
             onClick={onClose}
@@ -137,10 +191,14 @@ export function TakeQuizModal({ quizId, onClose, onComplete }: TakeQuizModalProp
                       name={question.id}
                       value={oIndex}
                       checked={answers[question.id] === oIndex}
-                      onChange={() => setAnswers({ ...answers, [question.id]: oIndex })}
+                      onChange={() =>
+                        setAnswers({ ...answers, [question.id]: oIndex })
+                      }
                       className="w-4 h-4 text-blue-600"
                     />
-                    <span className="text-gray-900 dark:text-white">{option}</span>
+                    <span className="text-gray-900 dark:text-white">
+                      {option}
+                    </span>
                   </label>
                 ))}
               </div>

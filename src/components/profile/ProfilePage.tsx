@@ -1,16 +1,8 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
 import { User, Mail, Calendar, Edit2, Camera, Save, X } from 'lucide-react';
-
-interface Profile {
-  id: string;
-  email: string;
-  full_name: string;
-  avatar_url: string | null;
-  bio: string | null;
-  created_at: string;
-}
+import type { Profile } from '../../lib/types';
 
 export function ProfilePage() {
   const { user } = useAuth();
@@ -22,24 +14,31 @@ export function ProfilePage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
-  useEffect(() => {
-    loadProfile();
-  }, [user]);
-
-  const loadProfile = async () => {
+  const loadProfile = useCallback(async () => {
     if (!user) return;
 
-    const { data } = await supabase.from('profiles').select('*').eq('id', user.id).single();
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('*')
+      .eq('id', user.id)
+      .single();
 
-    if (data) {
-      setProfile(data);
-      setFullName(data.full_name || '');
-      setBio(data.bio || '');
-      setAvatarUrl(data.avatar_url || '');
+    if (error || !data) {
+      setLoading(false);
+      return;
     }
 
+    const profile = data as Profile;
+    setProfile(profile);
+    setFullName(profile.full_name || '');
+    setBio(profile.bio || '');
+    setAvatarUrl(profile.avatar_url || '');
     setLoading(false);
-  };
+  }, [user]);
+
+  useEffect(() => {
+    loadProfile();
+  }, [loadProfile]);
 
   const handleSave = async () => {
     if (!user) return;
@@ -48,10 +47,11 @@ export function ProfilePage() {
 
     const { error } = await supabase
       .from('profiles')
+      // @ts-expect-error - Supabase update types not properly inferred
       .update({
         full_name: fullName,
         bio: bio,
-        avatar_url: avatarUrl || null,
+        avatar_url: avatarUrl || '',
       })
       .eq('id', user.id);
 

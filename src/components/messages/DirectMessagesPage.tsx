@@ -1,8 +1,8 @@
-import { useEffect, useState } from 'react';
-import { supabase } from '../../lib/supabase';
-import { useAuth } from '../../contexts/AuthContext';
-import { Send, Users, MessageCircle } from 'lucide-react';
-import type { Profile } from '../../lib/types';
+import { useCallback, useEffect, useState } from "react";
+import { supabase } from "../../lib/supabase";
+import { useAuth } from "../../contexts/AuthContext";
+import { Send, Users, MessageCircle } from "lucide-react";
+import type { Connection, Profile } from "../../lib/types";
 
 type DirectMessage = {
   id: string;
@@ -19,61 +19,62 @@ type Conversation = {
   unread_count: number;
 };
 
+type ConnectionWithProfiles = Connection & {
+  requester: Profile;
+  recipient: Profile;
+};
+
 export function DirectMessagesPage() {
   const { user } = useAuth();
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [selectedUser, setSelectedUser] = useState<Profile | null>(null);
-  const [messages, setMessages] = useState<(DirectMessage & { sender: Profile })[]>([]);
-  const [messageText, setMessageText] = useState('');
+  const [messages, setMessages] = useState<
+    (DirectMessage & { sender: Profile })[]
+  >([]);
+  const [messageText, setMessageText] = useState("");
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
 
-  useEffect(() => {
-    loadConversations();
-  }, [user]);
-
-  useEffect(() => {
-    if (selectedUser) {
-      loadMessages(selectedUser.id);
-      subscribeToMessages(selectedUser.id);
-    }
-  }, [selectedUser]);
-
-  const loadConversations = async () => {
+  const loadConversations = useCallback(async () => {
     if (!user) return;
 
     // Get all accepted connections
     const { data: connections } = await supabase
-      .from('user_connections')
-      .select('*, requester:profiles!requester_id(*), recipient:profiles!recipient_id(*)')
-      .eq('status', 'accepted')
+      .from("user_connections")
+      .select(
+        "*, requester:profiles!requester_id(*), recipient:profiles!recipient_id(*)"
+      )
+      .eq("status", "accepted")
       .or(`requester_id.eq.${user.id},recipient_id.eq.${user.id}`);
 
     if (connections) {
       const conversationsData: Conversation[] = await Promise.all(
-        connections.map(async (conn: any) => {
-          const otherUser = conn.requester_id === user.id ? conn.recipient : conn.requester;
+        (connections as ConnectionWithProfiles[]).map(async (conn) => {
+          const otherUser =
+            conn.requester_id === user.id ? conn.recipient : conn.requester;
 
           // Get last message
           const { data: lastMsg } = await supabase
-            .from('direct_messages')
-            .select('*')
-            .or(`and(sender_id.eq.${user.id},recipient_id.eq.${otherUser.id}),and(sender_id.eq.${otherUser.id},recipient_id.eq.${user.id})`)
-            .order('created_at', { ascending: false })
+            .from("direct_messages")
+            .select("*")
+            .or(
+              `and(sender_id.eq.${user.id},recipient_id.eq.${otherUser.id}),and(sender_id.eq.${otherUser.id},recipient_id.eq.${user.id})`
+            )
+            .order("created_at", { ascending: false })
             .limit(1)
             .maybeSingle();
 
           // Count unread messages
           const { count } = await supabase
-            .from('direct_messages')
-            .select('*', { count: 'exact', head: true })
-            .eq('sender_id', otherUser.id)
-            .eq('recipient_id', user.id)
-            .eq('read', false);
+            .from("direct_messages")
+            .select("*", { count: "exact", head: true })
+            .eq("sender_id", otherUser.id)
+            .eq("recipient_id", user.id)
+            .eq("read", false);
 
           return {
             user: otherUser,
-            last_message: lastMsg || undefined,
+            last_message: (lastMsg as DirectMessage | null) || undefined,
             unread_count: count || 0,
           };
         })
@@ -81,8 +82,8 @@ export function DirectMessagesPage() {
 
       // Sort by last message time
       conversationsData.sort((a, b) => {
-        const aTime = a.last_message?.created_at || '0';
-        const bTime = b.last_message?.created_at || '0';
+        const aTime = a.last_message?.created_at || "0";
+        const bTime = b.last_message?.created_at || "0";
         return bTime.localeCompare(aTime);
       });
 
@@ -90,58 +91,80 @@ export function DirectMessagesPage() {
     }
 
     setLoading(false);
-  };
+  }, [user]);
 
-  const loadMessages = async (otherUserId: string) => {
-    if (!user) return;
+  const loadMessages = useCallback(
+    async (otherUserId: string) => {
+      if (!user) return;
 
-    const { data } = await supabase
-      .from('direct_messages')
-      .select('*, sender:profiles!sender_id(*)')
-      .or(`and(sender_id.eq.${user.id},recipient_id.eq.${otherUserId}),and(sender_id.eq.${otherUserId},recipient_id.eq.${user.id})`)
-      .order('created_at', { ascending: true });
+      const { data } = await supabase
+        .from("direct_messages")
+        .select("*, sender:profiles!sender_id(*)")
+        .or(
+          `and(sender_id.eq.${user.id},recipient_id.eq.${otherUserId}),and(sender_id.eq.${otherUserId},recipient_id.eq.${user.id})`
+        )
+        .order("created_at", { ascending: true });
 
-    if (data) {
-      setMessages(data as any);
+      if (data) {
+        setMessages((data as (DirectMessage & { sender: Profile })[]) || []);
 
-      // Mark messages as read
-      await supabase
-        .from('direct_messages')
-        .update({ read: true })
-        .eq('sender_id', otherUserId)
-        .eq('recipient_id', user.id)
-        .eq('read', false);
+        // Mark messages as read
+        await supabase
+          .from("direct_messages")
+          // @ts-expect-error - Supabase update types not properly inferred
+          .update({ read: true })
+          .eq("sender_id", otherUserId)
+          .eq("recipient_id", user.id)
+          .eq("read", false);
 
-      loadConversations();
-    }
-  };
+        loadConversations();
+      }
+    },
+    [user, loadConversations]
+  );
 
-  const subscribeToMessages = (otherUserId: string) => {
-    const channel = supabase
-      .channel(`dm-${user?.id}-${otherUserId}`)
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'direct_messages',
-        },
-        (payload) => {
-          const newMsg = payload.new as DirectMessage;
-          if (
-            (newMsg.sender_id === user?.id && newMsg.recipient_id === otherUserId) ||
-            (newMsg.sender_id === otherUserId && newMsg.recipient_id === user?.id)
-          ) {
-            loadMessages(otherUserId);
+  const subscribeToMessages = useCallback(
+    (otherUserId: string) => {
+      const channel = supabase
+        .channel(`dm-${user?.id}-${otherUserId}`)
+        .on(
+          "postgres_changes",
+          {
+            event: "INSERT",
+            schema: "public",
+            table: "direct_messages",
+          },
+          (payload) => {
+            const newMsg = payload.new as DirectMessage;
+            if (
+              (newMsg.sender_id === user?.id &&
+                newMsg.recipient_id === otherUserId) ||
+              (newMsg.sender_id === otherUserId &&
+                newMsg.recipient_id === user?.id)
+            ) {
+              loadMessages(otherUserId);
+            }
           }
-        }
-      )
-      .subscribe();
+        )
+        .subscribe();
 
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  };
+      return () => {
+        supabase.removeChannel(channel);
+      };
+    },
+    [user?.id, loadMessages]
+  );
+
+  useEffect(() => {
+    loadConversations();
+  }, [loadConversations]);
+
+  useEffect(() => {
+    if (!selectedUser) return;
+    const cleanup = subscribeToMessages(selectedUser.id);
+    loadMessages(selectedUser.id);
+    return cleanup;
+  }, [selectedUser, subscribeToMessages, loadMessages]);
 
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -149,14 +172,15 @@ export function DirectMessagesPage() {
 
     setSending(true);
 
-    const { error } = await supabase.from('direct_messages').insert({
+    // @ts-expect-error - Supabase insert types not properly inferred
+    const { error } = await supabase.from("direct_messages").insert({
       sender_id: user.id,
       recipient_id: selectedUser.id,
       content: messageText.trim(),
     });
 
     if (!error) {
-      setMessageText('');
+      setMessageText("");
       loadMessages(selectedUser.id);
     }
 
@@ -177,7 +201,9 @@ export function DirectMessagesPage() {
         {/* Conversations List */}
         <div className="w-80 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 overflow-y-auto">
           <div className="p-4 border-b border-gray-200 dark:border-gray-700">
-            <h2 className="font-semibold text-gray-900 dark:text-white">Conversations</h2>
+            <h2 className="font-semibold text-gray-900 dark:text-white">
+              Conversations
+            </h2>
           </div>
           <div className="divide-y divide-gray-200 dark:divide-gray-700">
             {conversations.length === 0 ? (
@@ -193,7 +219,9 @@ export function DirectMessagesPage() {
                   key={conv.user.id}
                   onClick={() => setSelectedUser(conv.user)}
                   className={`w-full p-4 text-left hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors ${
-                    selectedUser?.id === conv.user.id ? 'bg-blue-50 dark:bg-blue-900/20' : ''
+                    selectedUser?.id === conv.user.id
+                      ? "bg-blue-50 dark:bg-blue-900/20"
+                      : ""
                   }`}
                 >
                   <div className="flex items-start gap-3">
@@ -238,7 +266,9 @@ export function DirectMessagesPage() {
                       {selectedUser.full_name || selectedUser.email}
                     </h2>
                     {selectedUser.bio && (
-                      <p className="text-sm text-gray-600 dark:text-gray-400">{selectedUser.bio}</p>
+                      <p className="text-sm text-gray-600 dark:text-gray-400">
+                        {selectedUser.bio}
+                      </p>
                     )}
                   </div>
                 </div>
@@ -248,23 +278,30 @@ export function DirectMessagesPage() {
                 {messages.map((message) => {
                   const isOwn = message.sender_id === user?.id;
                   return (
-                    <div key={message.id} className={`flex ${isOwn ? 'justify-end' : 'justify-start'}`}>
+                    <div
+                      key={message.id}
+                      className={`flex ${
+                        isOwn ? "justify-end" : "justify-start"
+                      }`}
+                    >
                       <div
                         className={`max-w-xs lg:max-w-md px-4 py-2 rounded-lg ${
                           isOwn
-                            ? 'bg-blue-600 text-white'
-                            : 'bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-white'
+                            ? "bg-blue-600 text-white"
+                            : "bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-white"
                         }`}
                       >
                         <p className="break-words">{message.content}</p>
                         <p
                           className={`text-xs mt-1 ${
-                            isOwn ? 'text-blue-100' : 'text-gray-500 dark:text-gray-400'
+                            isOwn
+                              ? "text-blue-100"
+                              : "text-gray-500 dark:text-gray-400"
                           }`}
                         >
                           {new Date(message.created_at).toLocaleTimeString([], {
-                            hour: '2-digit',
-                            minute: '2-digit',
+                            hour: "2-digit",
+                            minute: "2-digit",
                           })}
                         </p>
                       </div>
@@ -273,7 +310,10 @@ export function DirectMessagesPage() {
                 })}
               </div>
 
-              <form onSubmit={handleSendMessage} className="p-4 border-t border-gray-200 dark:border-gray-700">
+              <form
+                onSubmit={handleSendMessage}
+                className="p-4 border-t border-gray-200 dark:border-gray-700"
+              >
                 <div className="flex gap-2">
                   <input
                     type="text"

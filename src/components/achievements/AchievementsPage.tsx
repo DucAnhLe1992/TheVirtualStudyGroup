@@ -1,41 +1,53 @@
-import { useEffect, useState } from 'react';
-import { supabase } from '../../lib/supabase';
-import { useAuth } from '../../contexts/AuthContext';
-import { Award, Lock, Trophy, Users, Calendar, MessageSquare, FileText, Flame } from 'lucide-react';
-
-interface Achievement {
-  id: string;
-  name: string;
-  description: string;
-  badge_icon: string;
-  requirement_type: string;
-  requirement_value: number;
-  earned: boolean;
-  earned_at?: string;
-}
+import { useEffect, useState, useCallback } from "react";
+import { supabase } from "../../lib/supabase";
+import { useAuth } from "../../contexts/AuthContext";
+import {
+  Award,
+  Lock,
+  Trophy,
+  Users,
+  Calendar,
+  MessageSquare,
+  FileText,
+  Flame,
+} from "lucide-react";
+import type { Achievement, UserAchievement } from "../../lib/types";
 
 export function AchievementsPage() {
   const { user } = useAuth();
-  const [achievements, setAchievements] = useState<Achievement[]>([]);
+  const [achievements, setAchievements] = useState<
+    (Achievement & { earned: boolean; earned_at?: string })[]
+  >([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    loadAchievements();
-  }, [user]);
-
-  const loadAchievements = async () => {
+  const loadAchievements = useCallback(async () => {
     if (!user) return;
 
     const [allAchievementsRes, earnedAchievementsRes] = await Promise.all([
-      supabase.from('achievements').select('*').order('requirement_value', { ascending: true }),
-      supabase.from('user_achievements').select('achievement_id, earned_at').eq('user_id', user.id),
+      supabase
+        .from("achievements")
+        .select("*")
+        .order("requirement_value", { ascending: true }),
+      supabase
+        .from("user_achievements")
+        .select("achievement_id, earned_at")
+        .eq("user_id", user.id),
     ]);
 
-    if (allAchievementsRes.data) {
-      const earnedIds = new Set(earnedAchievementsRes.data?.map((ea) => ea.achievement_id) || []);
-      const earnedMap = new Map(earnedAchievementsRes.data?.map((ea) => [ea.achievement_id, ea.earned_at]));
+    const allAchievements = allAchievementsRes.data as Achievement[] | null;
+    const earnedAchievements = earnedAchievementsRes.data as
+      | UserAchievement[]
+      | null;
 
-      const achievementsWithStatus = allAchievementsRes.data.map((ach) => ({
+    if (allAchievements) {
+      const earnedIds = new Set(
+        earnedAchievements?.map((ea) => ea.achievement_id) || []
+      );
+      const earnedMap = new Map(
+        earnedAchievements?.map((ea) => [ea.achievement_id, ea.earned_at])
+      );
+
+      const achievementsWithStatus = allAchievements.map((ach) => ({
         ...ach,
         earned: earnedIds.has(ach.id),
         earned_at: earnedMap.get(ach.id),
@@ -45,15 +57,19 @@ export function AchievementsPage() {
     }
 
     setLoading(false);
-  };
+  }, [user]);
+
+  useEffect(() => {
+    loadAchievements();
+  }, [loadAchievements]);
 
   const getIcon = (iconName: string) => {
-    const iconMap: { [key: string]: any } = {
+    const iconMap: { [key: string]: React.ElementType } = {
       users: Users,
       calendar: Calendar,
       trophy: Trophy,
-      'message-square': MessageSquare,
-      'file-text': FileText,
+      "message-square": MessageSquare,
+      "file-text": FileText,
       flame: Flame,
     };
     const IconComponent = iconMap[iconName] || Award;
@@ -73,7 +89,9 @@ export function AchievementsPage() {
   return (
     <div>
       <div className="mb-8">
-        <h2 className="text-3xl font-bold text-gray-900 dark:text-white">Achievements</h2>
+        <h2 className="text-3xl font-bold text-gray-900 dark:text-white">
+          Achievements
+        </h2>
         <p className="text-gray-600 dark:text-gray-400 mt-1">
           Unlock badges by completing milestones
         </p>
@@ -106,19 +124,23 @@ export function AchievementsPage() {
             key={achievement.id}
             className={`rounded-lg p-6 border-2 transition-all ${
               achievement.earned
-                ? 'bg-gradient-to-br from-yellow-50 to-orange-50 dark:from-yellow-900/20 dark:to-orange-900/20 border-yellow-400 dark:border-yellow-600'
-                : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 opacity-60'
+                ? "bg-gradient-to-br from-yellow-50 to-orange-50 dark:from-yellow-900/20 dark:to-orange-900/20 border-yellow-400 dark:border-yellow-600"
+                : "bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 opacity-60"
             }`}
           >
             <div className="flex items-start justify-between mb-4">
               <div
                 className={`w-16 h-16 rounded-lg flex items-center justify-center ${
                   achievement.earned
-                    ? 'bg-yellow-400 text-yellow-900'
-                    : 'bg-gray-200 dark:bg-gray-700 text-gray-400 dark:text-gray-500'
+                    ? "bg-yellow-400 text-yellow-900"
+                    : "bg-gray-200 dark:bg-gray-700 text-gray-400 dark:text-gray-500"
                 }`}
               >
-                {achievement.earned ? getIcon(achievement.badge_icon) : <Lock className="w-8 h-8" />}
+                {achievement.earned ? (
+                  getIcon(achievement.badge_icon)
+                ) : (
+                  <Lock className="w-8 h-8" />
+                )}
               </div>
               {achievement.earned && (
                 <div className="text-xs font-semibold px-2 py-1 bg-yellow-400 text-yellow-900 rounded">
@@ -127,8 +149,12 @@ export function AchievementsPage() {
               )}
             </div>
 
-            <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-2">{achievement.name}</h3>
-            <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">{achievement.description}</p>
+            <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-2">
+              {achievement.name}
+            </h3>
+            <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
+              {achievement.description}
+            </p>
 
             {achievement.earned && achievement.earned_at && (
               <p className="text-xs text-gray-500 dark:text-gray-400">

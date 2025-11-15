@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react';
-import { supabase } from '../../lib/supabase';
-import { useAuth } from '../../contexts/AuthContext';
+import { useEffect, useState, useCallback } from "react";
+import { supabase } from "../../lib/supabase";
+import { useAuth } from "../../contexts/AuthContext";
 import {
   X,
   Users,
@@ -13,18 +13,27 @@ import {
   LogOut,
   Crown,
   Send,
-  Upload,
   Plus,
   BookOpen,
-} from 'lucide-react';
-import { EditGroupModal } from './EditGroupModal';
-import { CreateSessionModal } from '../sessions/CreateSessionModal';
-import { UploadResourceModal } from '../resources/UploadResourceModal';
-import { CreateQuizModal } from '../quizzes/CreateQuizModal';
-import { CreatePostModal } from '../posts/CreatePostModal';
-import { PostCard } from '../posts/PostCard';
-import { PostDetailView } from '../posts/PostDetailView';
-import type { StudyGroup, GroupMembership, Message, Resource, Quiz, StudySession, Profile, Post } from '../../lib/types';
+} from "lucide-react";
+import { EditGroupModal } from "./EditGroupModal";
+import { CreateSessionModal } from "../sessions/CreateSessionModal";
+import { UploadResourceModal } from "../resources/UploadResourceModal";
+import { CreateQuizModal } from "../quizzes/CreateQuizModal";
+import { CreatePostModal } from "../posts/CreatePostModal";
+import { PostCard } from "../posts/PostCard";
+import { PostDetailView } from "../posts/PostDetailView";
+import type {
+  StudyGroup,
+  GroupMembership,
+  Message,
+  Resource,
+  Quiz,
+  StudySession,
+  Profile,
+  Post,
+  PostWithDetails,
+} from "../../lib/types";
 
 interface EnhancedGroupDetailViewProps {
   groupId: string;
@@ -32,18 +41,38 @@ interface EnhancedGroupDetailViewProps {
   onUpdate: () => void;
 }
 
-type TabType = 'overview' | 'posts' | 'chat' | 'resources' | 'quizzes' | 'sessions';
+type TabType =
+  | "overview"
+  | "posts"
+  | "chat"
+  | "resources"
+  | "quizzes"
+  | "sessions";
 
-export function EnhancedGroupDetailView({ groupId, onClose, onUpdate }: EnhancedGroupDetailViewProps) {
+export function EnhancedGroupDetailView({
+  groupId,
+  onClose,
+  onUpdate,
+}: EnhancedGroupDetailViewProps) {
   const { user } = useAuth();
-  const [activeTab, setActiveTab] = useState<TabType>('overview');
+  const [activeTab, setActiveTab] = useState<TabType>("overview");
   const [group, setGroup] = useState<StudyGroup | null>(null);
-  const [members, setMembers] = useState<(GroupMembership & { profile: Profile })[]>([]);
-  const [messages, setMessages] = useState<(Message & { profile: Profile })[]>([]);
-  const [resources, setResources] = useState<(Resource & { uploader: Profile })[]>([]);
+  const [members, setMembers] = useState<
+    (GroupMembership & { profile: Profile })[]
+  >([]);
+  const [messages, setMessages] = useState<(Message & { profile: Profile })[]>(
+    []
+  );
+  const [resources, setResources] = useState<
+    (Resource & { uploader: Profile })[]
+  >([]);
   const [quizzes, setQuizzes] = useState<(Quiz & { creator: Profile })[]>([]);
-  const [sessions, setSessions] = useState<(StudySession & { creator: Profile })[]>([]);
-  const [posts, setPosts] = useState<(Post & { author: Profile; comment_count?: number })[]>([]);
+  const [sessions, setSessions] = useState<
+    (StudySession & { creator: Profile })[]
+  >([]);
+  const [posts, setPosts] = useState<
+    (Post & { author: Profile; comment_count?: number })[]
+  >([]);
   const [loading, setLoading] = useState(true);
   const [showEditModal, setShowEditModal] = useState(false);
   const [showSessionModal, setShowSessionModal] = useState(false);
@@ -51,116 +80,112 @@ export function EnhancedGroupDetailView({ groupId, onClose, onUpdate }: Enhanced
   const [showQuizModal, setShowQuizModal] = useState(false);
   const [showPostModal, setShowPostModal] = useState(false);
   const [selectedPostId, setSelectedPostId] = useState<string | null>(null);
-  const [userRole, setUserRole] = useState<string>('');
-  const [messageText, setMessageText] = useState('');
+  const [userRole, setUserRole] = useState<string>("");
+  const [messageText, setMessageText] = useState("");
   const [sending, setSending] = useState(false);
 
-  useEffect(() => {
-    loadGroupDetails();
-    subscribeToMessages();
-  }, [groupId]);
-
-  const loadGroupDetails = async () => {
+  const loadGroupDetails = useCallback(async () => {
     const [groupRes, membersRes, roleRes] = await Promise.all([
-      supabase.from('study_groups').select('*').eq('id', groupId).maybeSingle(),
+      supabase.from("study_groups").select("*").eq("id", groupId).maybeSingle(),
       supabase
-        .from('group_memberships')
-        .select('*, profile:profiles(*)')
-        .eq('group_id', groupId)
-        .order('joined_at', { ascending: true }),
+        .from("group_memberships")
+        .select("*, profile:profiles(*)")
+        .eq("group_id", groupId)
+        .order("joined_at", { ascending: true }),
       supabase
-        .from('group_memberships')
-        .select('role')
-        .eq('group_id', groupId)
-        .eq('user_id', user?.id)
+        .from("group_memberships")
+        .select("role")
+        .eq("group_id", groupId)
+        .eq("user_id", user?.id || "")
         .maybeSingle(),
     ]);
 
-    if (groupRes.data) setGroup(groupRes.data);
-    if (membersRes.data) setMembers(membersRes.data as any);
-    if (roleRes.data) setUserRole(roleRes.data.role);
-
-    loadMessages();
-    loadResources();
-    loadQuizzes();
-    loadSessions();
-    loadPosts();
+    if (groupRes.data) setGroup(groupRes.data as StudyGroup);
+    if (membersRes.data)
+      setMembers(membersRes.data as (GroupMembership & { profile: Profile })[]);
+    const roleData = roleRes.data as { role: string } | null;
+    if (roleData) setUserRole(roleData.role);
 
     setLoading(false);
-  };
+  }, [groupId, user?.id]);
 
-  const loadMessages = async () => {
+  const loadMessages = useCallback(async () => {
     const { data } = await supabase
-      .from('messages')
-      .select('*, profile:profiles(*)')
-      .eq('group_id', groupId)
-      .order('created_at', { ascending: true })
+      .from("messages")
+      .select("*, profile:profiles(*)")
+      .eq("group_id", groupId)
+      .order("created_at", { ascending: true })
       .limit(50);
 
-    if (data) setMessages(data as any);
-  };
+    if (data) setMessages(data as (Message & { profile: Profile })[]);
+  }, [groupId]);
 
-  const loadResources = async () => {
+  const loadResources = useCallback(async () => {
     const { data } = await supabase
-      .from('resources')
-      .select('*, uploader:profiles(*)')
-      .eq('group_id', groupId)
-      .order('created_at', { ascending: false });
+      .from("resources")
+      .select("*, uploader:profiles(*)")
+      .eq("group_id", groupId)
+      .order("created_at", { ascending: false });
 
-    if (data) setResources(data as any);
-  };
+    if (data) setResources(data as (Resource & { uploader: Profile })[]);
+  }, [groupId]);
 
-  const loadQuizzes = async () => {
+  const loadQuizzes = useCallback(async () => {
     const { data } = await supabase
-      .from('quizzes')
-      .select('*, creator:profiles(*)')
-      .eq('group_id', groupId)
-      .order('created_at', { ascending: false });
+      .from("quizzes")
+      .select("*, creator:profiles(*)")
+      .eq("group_id", groupId)
+      .order("created_at", { ascending: false });
 
-    if (data) setQuizzes(data as any);
-  };
+    if (data) setQuizzes(data as (Quiz & { creator: Profile })[]);
+  }, [groupId]);
 
-  const loadSessions = async () => {
+  const loadSessions = useCallback(async () => {
     const { data } = await supabase
-      .from('study_sessions')
-      .select('*, creator:profiles(*)')
-      .eq('group_id', groupId)
-      .order('scheduled_at', { ascending: false });
+      .from("study_sessions")
+      .select("*, creator:profiles(*)")
+      .eq("group_id", groupId)
+      .order("scheduled_at", { ascending: false });
 
-    if (data) setSessions(data as any);
-  };
+    if (data) setSessions(data as (StudySession & { creator: Profile })[]);
+  }, [groupId]);
 
-  const loadPosts = async () => {
+  const loadPosts = useCallback(async () => {
     const { data: postsData } = await supabase
-      .from('posts')
-      .select('*, author:profiles(*)')
-      .eq('group_id', groupId)
-      .order('is_pinned', { ascending: false })
-      .order('created_at', { ascending: false });
+      .from("posts")
+      .select("*, author:profiles(*)")
+      .eq("group_id", groupId)
+      .order("is_pinned", { ascending: false })
+      .order("created_at", { ascending: false });
 
     if (postsData) {
       const postsWithCounts = await Promise.all(
-        postsData.map(async (post: any) => {
+        (postsData as (Post & { author: Profile })[]).map(async (post) => {
           const { count } = await supabase
-            .from('comments')
-            .select('*', { count: 'exact', head: true })
-            .eq('post_id', post.id);
+            .from("comments")
+            .select("*", { count: "exact", head: true })
+            .eq("post_id", post.id);
           return { ...post, comment_count: count || 0 };
         })
       );
-      setPosts(postsWithCounts);
+      setPosts(
+        postsWithCounts as (Post & {
+          author: Profile;
+          comment_count?: number;
+        })[]
+      );
     }
-  };
+  }, [groupId]);
 
-  const subscribeToMessages = () => {
+  const subscribeToMessages = useCallback(() => {
     const channel = supabase
       .channel(`group-messages-${groupId}`)
       .on(
-        'postgres_changes',
+        "postgres_changes",
         {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'messages',
+          event: "INSERT",
+          schema: "public",
+          table: "messages",
           filter: `group_id=eq.${groupId}`,
         },
         () => {
@@ -172,29 +197,59 @@ export function EnhancedGroupDetailView({ groupId, onClose, onUpdate }: Enhanced
     return () => {
       supabase.removeChannel(channel);
     };
-  };
+  }, [groupId, loadMessages]);
+
+  useEffect(() => {
+    loadGroupDetails();
+    loadMessages();
+    loadResources();
+    loadQuizzes();
+    loadSessions();
+    loadPosts();
+    const cleanup = subscribeToMessages();
+    return () => {
+      if (cleanup) cleanup();
+    };
+  }, [
+    loadGroupDetails,
+    loadMessages,
+    loadResources,
+    loadQuizzes,
+    loadSessions,
+    loadPosts,
+    subscribeToMessages,
+  ]);
 
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!messageText.trim() || !user) return;
 
     setSending(true);
-    const { error } = await supabase.from('messages').insert({
+    // @ts-expect-error - Supabase insert types not properly inferred
+    const { error } = await supabase.from("messages").insert({
       group_id: groupId,
       user_id: user.id,
       content: messageText.trim(),
     });
 
     if (!error) {
-      setMessageText('');
+      setMessageText("");
     }
     setSending(false);
   };
 
   const handleDeleteGroup = async () => {
-    if (!confirm('Are you sure you want to delete this group? This action cannot be undone.')) return;
+    if (
+      !confirm(
+        "Are you sure you want to delete this group? This action cannot be undone."
+      )
+    )
+      return;
 
-    const { error } = await supabase.from('study_groups').delete().eq('id', groupId);
+    const { error } = await supabase
+      .from("study_groups")
+      .delete()
+      .eq("id", groupId);
 
     if (!error) {
       onUpdate();
@@ -203,13 +258,14 @@ export function EnhancedGroupDetailView({ groupId, onClose, onUpdate }: Enhanced
   };
 
   const handleLeaveGroup = async () => {
-    if (!confirm('Are you sure you want to leave this group?')) return;
+    if (!confirm("Are you sure you want to leave this group?")) return;
+    if (!user?.id) return;
 
     const { error } = await supabase
-      .from('group_memberships')
+      .from("group_memberships")
       .delete()
-      .eq('group_id', groupId)
-      .eq('user_id', user?.id);
+      .eq("group_id", groupId)
+      .eq("user_id", user.id);
 
     if (!error) {
       onUpdate();
@@ -218,9 +274,12 @@ export function EnhancedGroupDetailView({ groupId, onClose, onUpdate }: Enhanced
   };
 
   const handleRemoveMember = async (memberId: string) => {
-    if (!confirm('Remove this member from the group?')) return;
+    if (!confirm("Remove this member from the group?")) return;
 
-    const { error } = await supabase.from('group_memberships').delete().eq('id', memberId);
+    const { error } = await supabase
+      .from("group_memberships")
+      .delete()
+      .eq("id", memberId);
 
     if (!error) {
       loadGroupDetails();
@@ -239,16 +298,16 @@ export function EnhancedGroupDetailView({ groupId, onClose, onUpdate }: Enhanced
     );
   }
 
-  const isAdmin = userRole === 'admin';
+  const isAdmin = userRole === "admin";
   const isCreator = group.created_by === user?.id;
 
   const tabs = [
-    { id: 'overview' as const, label: 'Overview', icon: Users },
-    { id: 'posts' as const, label: 'Posts', icon: BookOpen },
-    { id: 'chat' as const, label: 'Chat', icon: MessageSquare },
-    { id: 'resources' as const, label: 'Resources', icon: FileText },
-    { id: 'quizzes' as const, label: 'Quizzes', icon: Trophy },
-    { id: 'sessions' as const, label: 'Sessions', icon: Calendar },
+    { id: "overview" as const, label: "Overview", icon: Users },
+    { id: "posts" as const, label: "Posts", icon: BookOpen },
+    { id: "chat" as const, label: "Chat", icon: MessageSquare },
+    { id: "resources" as const, label: "Resources", icon: FileText },
+    { id: "quizzes" as const, label: "Quizzes", icon: Trophy },
+    { id: "sessions" as const, label: "Sessions", icon: Calendar },
   ];
 
   return (
@@ -256,7 +315,9 @@ export function EnhancedGroupDetailView({ groupId, onClose, onUpdate }: Enhanced
       <div className="bg-white dark:bg-gray-800 rounded-lg max-w-6xl w-full h-[90vh] flex flex-col transition-colors">
         <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-gray-700">
           <div className="flex-1">
-            <h2 className="text-2xl font-bold text-gray-900 dark:text-white">{group.name}</h2>
+            <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
+              {group.name}
+            </h2>
             {group.subject && (
               <span className="inline-block mt-2 px-3 py-1 text-sm bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded">
                 {group.subject}
@@ -282,8 +343,8 @@ export function EnhancedGroupDetailView({ groupId, onClose, onUpdate }: Enhanced
                 onClick={() => setActiveTab(tab.id)}
                 className={`flex items-center gap-2 px-4 py-3 border-b-2 transition-colors ${
                   isActive
-                    ? 'border-blue-600 dark:border-blue-400 text-blue-600 dark:text-blue-400 font-medium'
-                    : 'border-transparent text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
+                    ? "border-blue-600 dark:border-blue-400 text-blue-600 dark:text-blue-400 font-medium"
+                    : "border-transparent text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200"
                 }`}
               >
                 <Icon className="w-4 h-4" />
@@ -294,21 +355,33 @@ export function EnhancedGroupDetailView({ groupId, onClose, onUpdate }: Enhanced
         </div>
 
         <div className="flex-1 overflow-y-auto p-6">
-          {activeTab === 'overview' && (
+          {activeTab === "overview" && (
             <div className="space-y-6">
               <div>
-                <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400 mb-2">Description</h3>
-                <p className="text-gray-900 dark:text-white">{group.description || 'No description provided'}</p>
+                <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400 mb-2">
+                  Description
+                </h3>
+                <p className="text-gray-900 dark:text-white">
+                  {group.description || "No description provided"}
+                </p>
               </div>
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400 mb-1">Visibility</h3>
-                  <p className="text-gray-900 dark:text-white">{group.is_public ? 'Public' : 'Private'}</p>
+                  <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400 mb-1">
+                    Visibility
+                  </h3>
+                  <p className="text-gray-900 dark:text-white">
+                    {group.is_public ? "Public" : "Private"}
+                  </p>
                 </div>
                 <div>
-                  <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400 mb-1">Max Members</h3>
-                  <p className="text-gray-900 dark:text-white">{group.max_members}</p>
+                  <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400 mb-1">
+                    Max Members
+                  </h3>
+                  <p className="text-gray-900 dark:text-white">
+                    {group.max_members}
+                  </p>
                 </div>
               </div>
 
@@ -329,13 +402,15 @@ export function EnhancedGroupDetailView({ groupId, onClose, onUpdate }: Enhanced
                         </div>
                         <div>
                           <p className="font-medium text-gray-900 dark:text-white">
-                            {member.profile?.full_name || member.profile?.email || 'Unknown'}
+                            {member.profile?.full_name ||
+                              member.profile?.email ||
+                              "Unknown"}
                           </p>
                           <div className="flex items-center gap-2">
                             <span className="text-xs text-gray-500 dark:text-gray-400">
                               {new Date(member.joined_at).toLocaleDateString()}
                             </span>
-                            {member.role === 'admin' && (
+                            {member.role === "admin" && (
                               <span className="flex items-center gap-1 text-xs bg-purple-100 dark:bg-purple-900 text-purple-700 dark:text-purple-300 px-2 py-0.5 rounded">
                                 <Crown className="w-3 h-3" />
                                 Admin
@@ -359,10 +434,12 @@ export function EnhancedGroupDetailView({ groupId, onClose, onUpdate }: Enhanced
             </div>
           )}
 
-          {activeTab === 'posts' && (
+          {activeTab === "posts" && (
             <div className="space-y-4">
               <div className="flex items-center justify-between">
-                <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Group Posts</h3>
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                  Group Posts
+                </h3>
                 <button
                   onClick={() => setShowPostModal(true)}
                   className="flex items-center gap-2 px-4 py-2 bg-blue-600 dark:bg-blue-500 text-white rounded-lg hover:bg-blue-700 dark:hover:bg-blue-600 transition-colors"
@@ -375,7 +452,7 @@ export function EnhancedGroupDetailView({ groupId, onClose, onUpdate }: Enhanced
                 {posts.map((post) => (
                   <PostCard
                     key={post.id}
-                    post={post as any}
+                    post={post as PostWithDetails}
                     onClick={() => setSelectedPostId(post.id)}
                   />
                 ))}
@@ -388,7 +465,7 @@ export function EnhancedGroupDetailView({ groupId, onClose, onUpdate }: Enhanced
             </div>
           )}
 
-          {activeTab === 'chat' && (
+          {activeTab === "chat" && (
             <div className="h-full flex flex-col">
               <div className="flex-1 overflow-y-auto space-y-4 mb-4">
                 {messages.map((message) => (
@@ -399,13 +476,17 @@ export function EnhancedGroupDetailView({ groupId, onClose, onUpdate }: Enhanced
                     <div className="flex-1">
                       <div className="flex items-baseline gap-2">
                         <span className="font-medium text-gray-900 dark:text-white text-sm">
-                          {message.profile?.full_name || message.profile?.email || 'Unknown'}
+                          {message.profile?.full_name ||
+                            message.profile?.email ||
+                            "Unknown"}
                         </span>
                         <span className="text-xs text-gray-500 dark:text-gray-400">
                           {new Date(message.created_at).toLocaleTimeString()}
                         </span>
                       </div>
-                      <p className="text-gray-700 dark:text-gray-300 mt-1">{message.content}</p>
+                      <p className="text-gray-700 dark:text-gray-300 mt-1">
+                        {message.content}
+                      </p>
                     </div>
                   </div>
                 ))}
@@ -415,7 +496,10 @@ export function EnhancedGroupDetailView({ groupId, onClose, onUpdate }: Enhanced
                   </div>
                 )}
               </div>
-              <form onSubmit={handleSendMessage} className="flex gap-2 pt-4 border-t border-gray-200 dark:border-gray-700">
+              <form
+                onSubmit={handleSendMessage}
+                className="flex gap-2 pt-4 border-t border-gray-200 dark:border-gray-700"
+              >
                 <input
                   type="text"
                   value={messageText}
@@ -434,10 +518,12 @@ export function EnhancedGroupDetailView({ groupId, onClose, onUpdate }: Enhanced
             </div>
           )}
 
-          {activeTab === 'resources' && (
+          {activeTab === "resources" && (
             <div className="space-y-4">
               <div className="flex items-center justify-between">
-                <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Shared Resources</h3>
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                  Shared Resources
+                </h3>
                 <button
                   onClick={() => setShowResourceModal(true)}
                   className="flex items-center gap-2 px-4 py-2 bg-blue-600 dark:bg-blue-500 text-white rounded-lg hover:bg-blue-700 dark:hover:bg-blue-600 transition-colors"
@@ -448,12 +534,20 @@ export function EnhancedGroupDetailView({ groupId, onClose, onUpdate }: Enhanced
               </div>
               <div className="space-y-2">
                 {resources.map((resource) => (
-                  <div key={resource.id} className="p-4 bg-gray-50 dark:bg-gray-700 rounded-lg">
-                    <h4 className="font-medium text-gray-900 dark:text-white">{resource.title}</h4>
-                    <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">{resource.description}</p>
+                  <div
+                    key={resource.id}
+                    className="p-4 bg-gray-50 dark:bg-gray-700 rounded-lg"
+                  >
+                    <h4 className="font-medium text-gray-900 dark:text-white">
+                      {resource.title}
+                    </h4>
+                    <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                      {resource.description}
+                    </p>
                     <div className="flex items-center justify-between mt-2">
                       <span className="text-xs text-gray-500 dark:text-gray-400">
-                        By {resource.uploader?.full_name || 'Unknown'} • {new Date(resource.created_at).toLocaleDateString()}
+                        By {resource.uploader?.full_name || "Unknown"} •{" "}
+                        {new Date(resource.created_at).toLocaleDateString()}
                       </span>
                       <a
                         href={resource.file_url}
@@ -475,10 +569,12 @@ export function EnhancedGroupDetailView({ groupId, onClose, onUpdate }: Enhanced
             </div>
           )}
 
-          {activeTab === 'quizzes' && (
+          {activeTab === "quizzes" && (
             <div className="space-y-4">
               <div className="flex items-center justify-between">
-                <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Group Quizzes</h3>
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                  Group Quizzes
+                </h3>
                 <button
                   onClick={() => setShowQuizModal(true)}
                   className="flex items-center gap-2 px-4 py-2 bg-blue-600 dark:bg-blue-500 text-white rounded-lg hover:bg-blue-700 dark:hover:bg-blue-600 transition-colors"
@@ -489,15 +585,31 @@ export function EnhancedGroupDetailView({ groupId, onClose, onUpdate }: Enhanced
               </div>
               <div className="space-y-2">
                 {quizzes.map((quiz) => (
-                  <div key={quiz.id} className="p-4 bg-gray-50 dark:bg-gray-700 rounded-lg">
-                    <h4 className="font-medium text-gray-900 dark:text-white">{quiz.title}</h4>
-                    <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">{quiz.description}</p>
+                  <div
+                    key={quiz.id}
+                    className="p-4 bg-gray-50 dark:bg-gray-700 rounded-lg"
+                  >
+                    <h4 className="font-medium text-gray-900 dark:text-white">
+                      {quiz.title}
+                    </h4>
+                    <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                      {quiz.description}
+                    </p>
                     <div className="flex items-center justify-between mt-2">
                       <span className="text-xs text-gray-500 dark:text-gray-400">
-                        By {quiz.creator?.full_name || 'Unknown'} • {quiz.time_limit_minutes ? `${quiz.time_limit_minutes} min` : 'No time limit'}
+                        By {quiz.creator?.full_name || "Unknown"} •{" "}
+                        {quiz.time_limit_minutes
+                          ? `${quiz.time_limit_minutes} min`
+                          : "No time limit"}
                       </span>
-                      <span className={`text-xs px-2 py-1 rounded ${quiz.is_active ? 'bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-300' : 'bg-gray-200 dark:bg-gray-600 text-gray-600 dark:text-gray-400'}`}>
-                        {quiz.is_active ? 'Active' : 'Inactive'}
+                      <span
+                        className={`text-xs px-2 py-1 rounded ${
+                          quiz.is_active
+                            ? "bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-300"
+                            : "bg-gray-200 dark:bg-gray-600 text-gray-600 dark:text-gray-400"
+                        }`}
+                      >
+                        {quiz.is_active ? "Active" : "Inactive"}
                       </span>
                     </div>
                   </div>
@@ -511,10 +623,12 @@ export function EnhancedGroupDetailView({ groupId, onClose, onUpdate }: Enhanced
             </div>
           )}
 
-          {activeTab === 'sessions' && (
+          {activeTab === "sessions" && (
             <div className="space-y-4">
               <div className="flex items-center justify-between">
-                <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Study Sessions</h3>
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                  Study Sessions
+                </h3>
                 <button
                   onClick={() => setShowSessionModal(true)}
                   className="flex items-center gap-2 px-4 py-2 bg-blue-600 dark:bg-blue-500 text-white rounded-lg hover:bg-blue-700 dark:hover:bg-blue-600 transition-colors"
@@ -525,19 +639,32 @@ export function EnhancedGroupDetailView({ groupId, onClose, onUpdate }: Enhanced
               </div>
               <div className="space-y-2">
                 {sessions.map((session) => (
-                  <div key={session.id} className="p-4 bg-gray-50 dark:bg-gray-700 rounded-lg">
-                    <h4 className="font-medium text-gray-900 dark:text-white">{session.title}</h4>
-                    <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">{session.description}</p>
+                  <div
+                    key={session.id}
+                    className="p-4 bg-gray-50 dark:bg-gray-700 rounded-lg"
+                  >
+                    <h4 className="font-medium text-gray-900 dark:text-white">
+                      {session.title}
+                    </h4>
+                    <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                      {session.description}
+                    </p>
                     <div className="flex items-center justify-between mt-2">
                       <span className="text-xs text-gray-500 dark:text-gray-400">
-                        {new Date(session.scheduled_at).toLocaleString()} • {session.duration_minutes} min
+                        {new Date(session.scheduled_at).toLocaleString()} •{" "}
+                        {session.duration_minutes} min
                       </span>
-                      <span className={`text-xs px-2 py-1 rounded ${
-                        session.status === 'scheduled' ? 'bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300' :
-                        session.status === 'active' ? 'bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-300' :
-                        session.status === 'completed' ? 'bg-gray-200 dark:bg-gray-600 text-gray-600 dark:text-gray-400' :
-                        'bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-300'
-                      }`}>
+                      <span
+                        className={`text-xs px-2 py-1 rounded ${
+                          session.status === "scheduled"
+                            ? "bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300"
+                            : session.status === "active"
+                            ? "bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-300"
+                            : session.status === "completed"
+                            ? "bg-gray-200 dark:bg-gray-600 text-gray-600 dark:text-gray-400"
+                            : "bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-300"
+                        }`}
+                      >
                         {session.status}
                       </span>
                     </div>
@@ -606,7 +733,7 @@ export function EnhancedGroupDetailView({ groupId, onClose, onUpdate }: Enhanced
 
       {showSessionModal && (
         <CreateSessionModal
-          groupId={groupId}
+          preselectedGroupId={groupId}
           onClose={() => setShowSessionModal(false)}
           onSuccess={() => {
             setShowSessionModal(false);
@@ -617,7 +744,7 @@ export function EnhancedGroupDetailView({ groupId, onClose, onUpdate }: Enhanced
 
       {showResourceModal && (
         <UploadResourceModal
-          groupId={groupId}
+          groups={[group]}
           onClose={() => setShowResourceModal(false)}
           onSuccess={() => {
             setShowResourceModal(false);
@@ -628,7 +755,7 @@ export function EnhancedGroupDetailView({ groupId, onClose, onUpdate }: Enhanced
 
       {showQuizModal && (
         <CreateQuizModal
-          groupId={groupId}
+          groups={[group]}
           onClose={() => setShowQuizModal(false)}
           onSuccess={() => {
             setShowQuizModal(false);

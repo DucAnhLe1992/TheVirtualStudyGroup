@@ -1,11 +1,11 @@
-import { useEffect, useState } from 'react';
-import { supabase } from '../../lib/supabase';
-import { useAuth } from '../../contexts/AuthContext';
-import { Plus, Filter, Search, BookOpen } from 'lucide-react';
-import { CreatePostModal } from './CreatePostModal';
-import { PostCard } from './PostCard';
-import { PostDetailView } from './PostDetailView';
-import type { Post, Profile, StudyGroup } from '../../lib/types';
+import { useCallback, useEffect, useState } from "react";
+import { supabase } from "../../lib/supabase";
+import { useAuth } from "../../contexts/AuthContext";
+import { Plus, Search, BookOpen } from "lucide-react";
+import { CreatePostModal } from "./CreatePostModal";
+import { PostCard } from "./PostCard";
+import { PostDetailView } from "./PostDetailView";
+import type { Post, Profile, StudyGroup } from "../../lib/types";
 
 type PostWithDetails = Post & {
   author: Profile;
@@ -20,41 +20,37 @@ export function PostsPage() {
   const [loading, setLoading] = useState(true);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [selectedPostId, setSelectedPostId] = useState<string | null>(null);
-  const [selectedGroupId, setSelectedGroupId] = useState<string>('all');
-  const [searchQuery, setSearchQuery] = useState('');
-  const [filterType, setFilterType] = useState<string>('all');
+  const [selectedGroupId, setSelectedGroupId] = useState<string>("all");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [filterType, setFilterType] = useState<string>("all");
 
-  useEffect(() => {
-    loadUserGroups();
-    loadPosts();
-  }, [user, selectedGroupId, searchQuery, filterType]);
-
-  const loadUserGroups = async () => {
+  const loadUserGroups = useCallback(async () => {
     if (!user) return;
 
     const { data: memberships } = await supabase
-      .from('group_memberships')
-      .select('group_id, study_groups(*)')
-      .eq('user_id', user.id);
+      .from("group_memberships")
+      .select("group_id, study_groups(*)")
+      .eq("user_id", user.id);
 
     if (memberships) {
-      const groupsData = memberships
-        .map((m: any) => m.study_groups)
-        .filter(Boolean);
+      type MembershipWithGroup = { study_groups: StudyGroup | null };
+      const groupsData = (memberships as MembershipWithGroup[])
+        .map((m) => m.study_groups)
+        .filter(Boolean) as StudyGroup[];
       setGroups(groupsData);
     }
-  };
+  }, [user]);
 
-  const loadPosts = async () => {
+  const loadPosts = useCallback(async () => {
     if (!user) return;
 
     setLoading(true);
 
     // Get all groups user is a member of
     const { data: memberships } = await supabase
-      .from('group_memberships')
-      .select('group_id')
-      .eq('user_id', user.id);
+      .from("group_memberships")
+      .select("group_id")
+      .eq("user_id", user.id);
 
     if (!memberships || memberships.length === 0) {
       setPosts([]);
@@ -62,50 +58,64 @@ export function PostsPage() {
       return;
     }
 
-    const groupIds = memberships.map((m) => m.group_id);
+    const groupIds = ((memberships as Array<{ group_id: string }>) || []).map(
+      (m) => m.group_id
+    );
 
     // Build query
     let query = supabase
-      .from('posts')
-      .select('*, author:profiles(*), group:study_groups(*)')
-      .in('group_id', groupIds);
+      .from("posts")
+      .select("*, author:profiles(*), group:study_groups(*)")
+      .in("group_id", groupIds);
 
     // Filter by selected group
-    if (selectedGroupId !== 'all') {
-      query = query.eq('group_id', selectedGroupId);
+    if (selectedGroupId !== "all") {
+      query = query.eq("group_id", selectedGroupId);
     }
 
     // Filter by post type
-    if (filterType !== 'all') {
-      query = query.eq('post_type', filterType);
+    if (filterType !== "all") {
+      query = query.eq("post_type", filterType);
     }
 
     // Search
     if (searchQuery) {
-      query = query.or(`title.ilike.%${searchQuery}%,content.ilike.%${searchQuery}%`);
+      query = query.or(
+        `title.ilike.%${searchQuery}%,content.ilike.%${searchQuery}%`
+      );
     }
 
     // Order by pinned and date
-    query = query.order('is_pinned', { ascending: false }).order('created_at', { ascending: false });
+    query = query
+      .order("is_pinned", { ascending: false })
+      .order("created_at", { ascending: false });
 
     const { data: postsData } = await query;
 
     if (postsData) {
       // Get comment counts
       const postsWithCounts = await Promise.all(
-        postsData.map(async (post: any) => {
+        (postsData as PostWithDetails[]).map(async (post) => {
           const { count } = await supabase
-            .from('comments')
-            .select('*', { count: 'exact', head: true })
-            .eq('post_id', post.id);
+            .from("comments")
+            .select("*", { count: "exact", head: true })
+            .eq("post_id", post.id);
           return { ...post, comment_count: count || 0 };
         })
       );
-      setPosts(postsWithCounts);
+      setPosts(postsWithCounts as PostWithDetails[]);
     }
 
     setLoading(false);
-  };
+  }, [user, selectedGroupId, searchQuery, filterType]);
+
+  useEffect(() => {
+    loadUserGroups();
+  }, [loadUserGroups]);
+
+  useEffect(() => {
+    loadPosts();
+  }, [loadPosts]);
 
   const handlePostCreated = () => {
     setShowCreateModal(false);
@@ -124,7 +134,9 @@ export function PostsPage() {
     <div className="max-w-5xl mx-auto">
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Posts</h1>
+          <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
+            Posts
+          </h1>
           <p className="text-gray-600 dark:text-gray-400 mt-1">
             Share knowledge, ask questions, and discuss with your study groups
           </p>
@@ -142,8 +154,12 @@ export function PostsPage() {
       {groups.length === 0 ? (
         <div className="text-center py-12 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
           <BookOpen className="w-12 h-12 text-gray-400 dark:text-gray-500 mx-auto mb-4" />
-          <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">No groups yet</h3>
-          <p className="text-gray-600 dark:text-gray-400">Join or create a group to start posting</p>
+          <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">
+            No groups yet
+          </h3>
+          <p className="text-gray-600 dark:text-gray-400">
+            Join or create a group to start posting
+          </p>
         </div>
       ) : (
         <>
@@ -190,11 +206,13 @@ export function PostsPage() {
             {posts.length === 0 ? (
               <div className="text-center py-12 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
                 <BookOpen className="w-12 h-12 text-gray-400 dark:text-gray-500 mx-auto mb-4" />
-                <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">No posts found</h3>
+                <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">
+                  No posts found
+                </h3>
                 <p className="text-gray-600 dark:text-gray-400">
-                  {searchQuery || filterType !== 'all'
-                    ? 'Try adjusting your filters'
-                    : 'Be the first to create a post!'}
+                  {searchQuery || filterType !== "all"
+                    ? "Try adjusting your filters"
+                    : "Be the first to create a post!"}
                 </p>
               </div>
             ) : (
@@ -212,7 +230,7 @@ export function PostsPage() {
                     </div>
                   )}
                   <PostCard
-                    post={post as any}
+                    post={post as PostWithDetails}
                     onClick={() => setSelectedPostId(post.id)}
                   />
                 </div>
@@ -233,7 +251,7 @@ export function PostsPage() {
       {selectedPostId && (
         <PostDetailView
           postId={selectedPostId}
-          groupId={posts.find((p) => p.id === selectedPostId)?.group_id || ''}
+          groupId={posts.find((p) => p.id === selectedPostId)?.group_id || ""}
           onClose={() => setSelectedPostId(null)}
           onUpdate={loadPosts}
         />

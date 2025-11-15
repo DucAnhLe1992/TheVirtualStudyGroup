@@ -1,74 +1,104 @@
-import { useState, useEffect } from 'react';
-import { supabase } from '../../lib/supabase';
-import { useAuth } from '../../contexts/AuthContext';
-import { X, AlertCircle, Plus, Trash2 } from 'lucide-react';
+import { useCallback, useEffect, useState } from "react";
+import { supabase } from "../../lib/supabase";
+import { useAuth } from "../../contexts/AuthContext";
+import { X, AlertCircle, Plus, Trash2 } from "lucide-react";
+import type { StudyGroup, Quiz, QuizQuestion } from "../../lib/types";
 
-interface Group {
-  id: string;
-  name: string;
-}
-
-interface Question {
+type QuizQuestionInput = {
   id?: string;
   question_text: string;
   options: string[];
   correct_answer: number;
-}
+};
 
 interface CreateQuizModalProps {
-  groups: Group[];
+  groups: StudyGroup[];
   quizId?: string | null;
   onClose: () => void;
   onSuccess: () => void;
 }
 
-export function CreateQuizModal({ groups, quizId, onClose, onSuccess }: CreateQuizModalProps) {
+export function CreateQuizModal({
+  groups,
+  quizId,
+  onClose,
+  onSuccess,
+}: CreateQuizModalProps) {
   const { user } = useAuth();
-  const [title, setTitle] = useState('');
-  const [description, setDescription] = useState('');
-  const [groupId, setGroupId] = useState('');
-  const [questions, setQuestions] = useState<Question[]>([
-    { question_text: '', options: ['', '', '', ''], correct_answer: 0 },
+  const [title, setTitle] = useState("");
+  const [description, setDescription] = useState("");
+  const [groupId, setGroupId] = useState("");
+  const [questions, setQuestions] = useState<QuizQuestionInput[]>([
+    { question_text: "", options: ["", "", "", ""], correct_answer: 0 },
   ]);
-  const [error, setError] = useState('');
+  const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+
+  const loadQuiz = useCallback(async () => {
+    if (!quizId) return;
+
+    const [quizRes, questionsRes] = await Promise.all([
+      supabase.from("quizzes").select("*").eq("id", quizId).single(),
+      supabase.from("quiz_questions").select("*").eq("quiz_id", quizId),
+    ]);
+
+    const quizData = (quizRes as unknown as { data: Quiz | null }).data;
+    if (quizData) {
+      setTitle(quizData.title);
+      setDescription(quizData.description || "");
+      setGroupId(quizData.group_id);
+    }
+
+    const questionsData = (
+      questionsRes as unknown as { data: QuizQuestion[] | null }
+    ).data;
+    if (questionsData && questionsData.length > 0) {
+      setQuestions(
+        questionsData.map((q) => {
+          const opts = (q.options as unknown as string[]) ?? ["", "", "", ""];
+          const ansRaw = q.correct_answer as unknown;
+          const ans =
+            typeof ansRaw === "string"
+              ? parseInt(ansRaw, 10)
+              : (ansRaw as number) ?? 0;
+          return {
+            id: q.id,
+            question_text: q.question_text,
+            options: Array.isArray(opts)
+              ? opts.map((o) => String(o ?? ""))
+              : ["", "", "", ""],
+            correct_answer: Number.isFinite(ans) ? ans : 0,
+          };
+        })
+      );
+    }
+  }, [quizId]);
 
   useEffect(() => {
     if (quizId) {
       loadQuiz();
     }
-  }, [quizId]);
-
-  const loadQuiz = async () => {
-    if (!quizId) return;
-
-    const [quizRes, questionsRes] = await Promise.all([
-      supabase.from('quizzes').select('*').eq('id', quizId).single(),
-      supabase.from('quiz_questions').select('*').eq('quiz_id', quizId),
-    ]);
-
-    if (quizRes.data) {
-      setTitle(quizRes.data.title);
-      setDescription(quizRes.data.description || '');
-      setGroupId(quizRes.data.group_id);
-    }
-
-    if (questionsRes.data && questionsRes.data.length > 0) {
-      setQuestions(questionsRes.data);
-    }
-  };
+  }, [quizId, loadQuiz]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError('');
+    setError("");
 
     if (!groupId) {
-      setError('Please select a group');
+      setError("Please select a group");
       return;
     }
 
-    if (questions.length === 0 || questions.some((q) => !q.question_text || q.options.some((o) => !o))) {
-      setError('Please complete all questions and options');
+    if (!user?.id) {
+      setError("You must be signed in to create or edit a quiz");
+      return;
+    }
+
+    if (
+      questions.length === 0 ||
+      questions.some((q) => !q.question_text || q.options.some((o) => !o))
+    ) {
+      setError("Please complete all questions and options");
       return;
     }
 
@@ -78,36 +108,45 @@ export function CreateQuizModal({ groups, quizId, onClose, onSuccess }: CreateQu
 
     if (!quizId) {
       const { data: newQuiz, error: quizError } = await supabase
-        .from('quizzes')
+        .from("quizzes")
+        // @ts-expect-error - Supabase insert types not properly inferred
         .insert({
           title,
           description,
           group_id: groupId,
-          created_by: user?.id,
+          created_by: user.id,
         })
         .select()
         .single();
 
       if (quizError || !newQuiz) {
-        setError(quizError?.message || 'Failed to create quiz');
+        setError(quizError?.message || "Failed to create quiz");
         setLoading(false);
         return;
       }
 
-      quizIdToUse = newQuiz.id;
+      const newId = (newQuiz as Quiz).id;
+      quizIdToUse = newId;
     } else {
-      await supabase.from('quizzes').update({ title, description, group_id: groupId }).eq('id', quizId);
-      await supabase.from('quiz_questions').delete().eq('quiz_id', quizId);
+      await supabase
+        .from("quizzes")
+        // @ts-expect-error - Supabase update types not properly inferred
+        .update({ title, description, group_id: groupId })
+        .eq("id", quizId!);
+      await supabase.from("quiz_questions").delete().eq("quiz_id", quizId!);
+      quizIdToUse = quizId!;
     }
 
-    const { error: questionsError } = await supabase.from('quiz_questions').insert(
-      questions.map((q) => ({
-        quiz_id: quizIdToUse,
-        question_text: q.question_text,
-        options: q.options,
-        correct_answer: q.correct_answer,
-      }))
-    );
+    const { error: questionsError } = await supabase
+      .from("quiz_questions")
+      .insert(
+        questions.map((q) => ({
+          quiz_id: quizIdToUse,
+          question_text: q.question_text,
+          options: q.options as unknown as never,
+          correct_answer: String(q.correct_answer),
+        })) as unknown as never[]
+      );
 
     if (questionsError) {
       setError(questionsError.message);
@@ -120,20 +159,36 @@ export function CreateQuizModal({ groups, quizId, onClose, onSuccess }: CreateQu
   };
 
   const addQuestion = () => {
-    setQuestions([...questions, { question_text: '', options: ['', '', '', ''], correct_answer: 0 }]);
+    setQuestions([
+      ...questions,
+      { question_text: "", options: ["", "", "", ""], correct_answer: 0 },
+    ]);
   };
 
   const removeQuestion = (index: number) => {
     setQuestions(questions.filter((_, i) => i !== index));
   };
 
-  const updateQuestion = (index: number, field: string, value: any) => {
+  const updateQuestion = (
+    index: number,
+    field: "question_text" | "correct_answer",
+    value: string | number
+  ) => {
     const updated = [...questions];
-    updated[index] = { ...updated[index], [field]: value };
+    // Ensure correct typing per field
+    if (field === "question_text" && typeof value === "string") {
+      updated[index] = { ...updated[index], question_text: value };
+    } else if (field === "correct_answer" && typeof value === "number") {
+      updated[index] = { ...updated[index], correct_answer: value };
+    }
     setQuestions(updated);
   };
 
-  const updateOption = (questionIndex: number, optionIndex: number, value: string) => {
+  const updateOption = (
+    questionIndex: number,
+    optionIndex: number,
+    value: string
+  ) => {
     const updated = [...questions];
     updated[questionIndex].options[optionIndex] = value;
     setQuestions(updated);
@@ -144,7 +199,7 @@ export function CreateQuizModal({ groups, quizId, onClose, onSuccess }: CreateQu
       <div className="bg-white dark:bg-gray-800 rounded-lg max-w-3xl w-full p-6 my-8 transition-colors max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between mb-6">
           <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
-            {quizId ? 'Edit Quiz' : 'Create Quiz'}
+            {quizId ? "Edit Quiz" : "Create Quiz"}
           </h2>
           <button
             onClick={onClose}
@@ -176,7 +231,9 @@ export function CreateQuizModal({ groups, quizId, onClose, onSuccess }: CreateQu
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Group *</label>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+              Group *
+            </label>
             <select
               value={groupId}
               onChange={(e) => setGroupId(e.target.value)}
@@ -193,7 +250,9 @@ export function CreateQuizModal({ groups, quizId, onClose, onSuccess }: CreateQu
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Description</label>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+              Description
+            </label>
             <textarea
               value={description}
               onChange={(e) => setDescription(e.target.value)}
@@ -204,7 +263,9 @@ export function CreateQuizModal({ groups, quizId, onClose, onSuccess }: CreateQu
 
           <div>
             <div className="flex items-center justify-between mb-3">
-              <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Questions</h3>
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                Questions
+              </h3>
               <button
                 type="button"
                 onClick={addQuestion}
@@ -239,7 +300,9 @@ export function CreateQuizModal({ groups, quizId, onClose, onSuccess }: CreateQu
                   <input
                     type="text"
                     value={question.question_text}
-                    onChange={(e) => updateQuestion(qIndex, 'question_text', e.target.value)}
+                    onChange={(e) =>
+                      updateQuestion(qIndex, "question_text", e.target.value)
+                    }
                     placeholder="Enter your question"
                     required
                     className="w-full px-3 py-2 mb-3 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400"
@@ -252,13 +315,17 @@ export function CreateQuizModal({ groups, quizId, onClose, onSuccess }: CreateQu
                           type="radio"
                           name={`correct-${qIndex}`}
                           checked={question.correct_answer === oIndex}
-                          onChange={() => updateQuestion(qIndex, 'correct_answer', oIndex)}
+                          onChange={() =>
+                            updateQuestion(qIndex, "correct_answer", oIndex)
+                          }
                           className="w-4 h-4 text-blue-600"
                         />
                         <input
                           type="text"
                           value={option}
-                          onChange={(e) => updateOption(qIndex, oIndex, e.target.value)}
+                          onChange={(e) =>
+                            updateOption(qIndex, oIndex, e.target.value)
+                          }
                           placeholder={`Option ${oIndex + 1}`}
                           required
                           className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400"
@@ -284,7 +351,7 @@ export function CreateQuizModal({ groups, quizId, onClose, onSuccess }: CreateQu
               disabled={loading}
               className="flex-1 px-4 py-2 bg-blue-600 dark:bg-blue-500 text-white rounded-lg hover:bg-blue-700 dark:hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             >
-              {loading ? 'Saving...' : quizId ? 'Update Quiz' : 'Create Quiz'}
+              {loading ? "Saving..." : quizId ? "Update Quiz" : "Create Quiz"}
             </button>
           </div>
         </form>

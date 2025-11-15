@@ -1,32 +1,30 @@
-import { useEffect, useState } from 'react';
-import { supabase } from '../../lib/supabase';
-import { useAuth } from '../../contexts/AuthContext';
-import { X, Calendar, Clock, MapPin, Users, Trash2, CheckCircle, Video, Lock } from 'lucide-react';
-import { SessionLobby } from './SessionLobby';
+import { useEffect, useState, useCallback } from "react";
+import { supabase } from "../../lib/supabase";
+import { useAuth } from "../../contexts/AuthContext";
+import {
+  X,
+  Calendar,
+  Clock,
+  MapPin,
+  Users,
+  Trash2,
+  CheckCircle,
+  Video,
+  Lock,
+} from "lucide-react";
+import { SessionLobby } from "./SessionLobby";
+import type { StudySession, SessionParticipant } from "../../lib/types";
 
-interface Session {
-  id: string;
-  title: string;
-  description: string;
-  scheduled_for: string;
-  duration_minutes: number;
-  location: string;
-  status: string;
-  created_by: string;
-  meeting_link?: string;
-  meeting_platform?: string;
-  meeting_password?: string;
-  max_participants?: number;
+type SessionWithGroup = StudySession & {
   study_groups: {
     name: string;
   };
-}
-
-interface Participant {
-  id: string;
-  user_id: string;
-  joined_at: string;
-}
+  location: string | null;
+  meeting_link: string | null;
+  meeting_platform: string | null;
+  meeting_password: string | null;
+  max_participants: number | null;
+};
 
 interface SessionDetailViewProps {
   sessionId: string;
@@ -34,46 +32,58 @@ interface SessionDetailViewProps {
   onUpdate: () => void;
 }
 
-export function SessionDetailView({ sessionId, onClose, onUpdate }: SessionDetailViewProps) {
+export function SessionDetailView({
+  sessionId,
+  onClose,
+  onUpdate,
+}: SessionDetailViewProps) {
   const { user } = useAuth();
-  const [session, setSession] = useState<Session | null>(null);
-  const [participants, setParticipants] = useState<Participant[]>([]);
+  const [session, setSession] = useState<SessionWithGroup | null>(null);
+  const [participants, setParticipants] = useState<SessionParticipant[]>([]);
   const [loading, setLoading] = useState(true);
   const [isParticipant, setIsParticipant] = useState(false);
 
-  useEffect(() => {
-    loadSessionDetails();
-  }, [sessionId]);
-
-  const loadSessionDetails = async () => {
+  const loadSessionDetails = useCallback(async () => {
     const [sessionRes, participantsRes] = await Promise.all([
       supabase
-        .from('study_sessions')
-        .select('*, study_groups(name)')
-        .eq('id', sessionId)
+        .from("study_sessions")
+        .select("*, study_groups(name)")
+        .eq("id", sessionId)
         .single(),
       supabase
-        .from('session_participants')
-        .select('*')
-        .eq('session_id', sessionId),
+        .from("session_participants")
+        .select("*")
+        .eq("session_id", sessionId),
     ]);
 
-    if (sessionRes.data) setSession(sessionRes.data);
-    if (participantsRes.data) {
-      setParticipants(participantsRes.data);
-      setIsParticipant(participantsRes.data.some((p: Participant) => p.user_id === user?.id));
+    const sessionData = (
+      sessionRes as unknown as { data: SessionWithGroup | null }
+    ).data;
+    if (sessionData) setSession(sessionData);
+
+    const participantsData = (
+      participantsRes as unknown as { data: SessionParticipant[] | null }
+    ).data;
+    if (participantsData) {
+      setParticipants(participantsData);
+      setIsParticipant(participantsData.some((p) => p.user_id === user?.id));
     }
 
     setLoading(false);
-  };
+  }, [sessionId, user]);
+
+  useEffect(() => {
+    loadSessionDetails();
+  }, [loadSessionDetails]);
 
   const handleJoinSession = async () => {
-    const { error } = await supabase
-      .from('session_participants')
-      .insert({
-        session_id: sessionId,
-        user_id: user?.id,
-      });
+    if (!user?.id) return;
+
+    // @ts-expect-error - Supabase insert types not properly inferred
+    const { error } = await supabase.from("session_participants").insert({
+      session_id: sessionId,
+      user_id: user.id,
+    });
 
     if (!error) {
       loadSessionDetails();
@@ -81,13 +91,14 @@ export function SessionDetailView({ sessionId, onClose, onUpdate }: SessionDetai
   };
 
   const handleLeaveSession = async () => {
-    if (!confirm('Are you sure you want to leave this session?')) return;
+    if (!user?.id) return;
+    if (!confirm("Are you sure you want to leave this session?")) return;
 
     const { error } = await supabase
-      .from('session_participants')
+      .from("session_participants")
       .delete()
-      .eq('session_id', sessionId)
-      .eq('user_id', user?.id);
+      .eq("session_id", sessionId)
+      .eq("user_id", user.id);
 
     if (!error) {
       onUpdate();
@@ -96,12 +107,14 @@ export function SessionDetailView({ sessionId, onClose, onUpdate }: SessionDetai
   };
 
   const handleCancelSession = async () => {
-    if (!confirm('Are you sure you want to cancel this session?')) return;
+    if (!confirm("Are you sure you want to cancel this session?")) return;
 
+    setLoading(true);
     const { error } = await supabase
-      .from('study_sessions')
-      .update({ status: 'cancelled' })
-      .eq('id', sessionId);
+      .from("study_sessions")
+      // @ts-expect-error - Supabase update types not properly inferred
+      .update({ status: "cancelled" })
+      .eq("id", sessionId);
 
     if (!error) {
       loadSessionDetails();
@@ -110,10 +123,12 @@ export function SessionDetailView({ sessionId, onClose, onUpdate }: SessionDetai
   };
 
   const handleCompleteSession = async () => {
+    setLoading(true);
     const { error } = await supabase
-      .from('study_sessions')
-      .update({ status: 'completed' })
-      .eq('id', sessionId);
+      .from("study_sessions")
+      // @ts-expect-error - Supabase update types not properly inferred
+      .update({ status: "completed" })
+      .eq("id", sessionId);
 
     if (!error) {
       loadSessionDetails();
@@ -134,19 +149,25 @@ export function SessionDetailView({ sessionId, onClose, onUpdate }: SessionDetai
   }
 
   const isCreator = session.created_by === user?.id;
-  const isUpcoming = new Date(session.scheduled_for) > new Date();
+  const isUpcoming = new Date(session.scheduled_at) > new Date();
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50 overflow-y-auto">
       <div className="bg-white dark:bg-gray-800 rounded-lg max-w-3xl w-full p-6 my-8 transition-colors">
         <div className="flex items-center justify-between mb-6">
           <div className="flex-1">
-            <h2 className="text-2xl font-bold text-gray-900 dark:text-white">{session.title}</h2>
-            <span className={`inline-block mt-2 px-3 py-1 text-sm rounded ${
-              session.status === 'scheduled' ? 'bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300' :
-              session.status === 'completed' ? 'bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-300' :
-              'bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-300'
-            }`}>
+            <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
+              {session.title}
+            </h2>
+            <span
+              className={`inline-block mt-2 px-3 py-1 text-sm rounded ${
+                session.status === "scheduled"
+                  ? "bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300"
+                  : session.status === "completed"
+                  ? "bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-300"
+                  : "bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-300"
+              }`}
+            >
               {session.status}
             </span>
           </div>
@@ -163,17 +184,23 @@ export function SessionDetailView({ sessionId, onClose, onUpdate }: SessionDetai
             <div className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-700 rounded-lg">
               <Users className="w-5 h-5 text-blue-600 dark:text-blue-400" />
               <div>
-                <p className="text-sm text-gray-500 dark:text-gray-400">Study Group</p>
-                <p className="font-medium text-gray-900 dark:text-white">{session.study_groups.name}</p>
+                <p className="text-sm text-gray-500 dark:text-gray-400">
+                  Study Group
+                </p>
+                <p className="font-medium text-gray-900 dark:text-white">
+                  {session.study_groups.name}
+                </p>
               </div>
             </div>
 
             <div className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-700 rounded-lg">
               <Calendar className="w-5 h-5 text-blue-600 dark:text-blue-400" />
               <div>
-                <p className="text-sm text-gray-500 dark:text-gray-400">Date & Time</p>
+                <p className="text-sm text-gray-500 dark:text-gray-400">
+                  Date & Time
+                </p>
                 <p className="font-medium text-gray-900 dark:text-white">
-                  {new Date(session.scheduled_for).toLocaleString()}
+                  {new Date(session.scheduled_at).toLocaleString()}
                 </p>
               </div>
             </div>
@@ -181,8 +208,12 @@ export function SessionDetailView({ sessionId, onClose, onUpdate }: SessionDetai
             <div className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-700 rounded-lg">
               <Clock className="w-5 h-5 text-blue-600 dark:text-blue-400" />
               <div>
-                <p className="text-sm text-gray-500 dark:text-gray-400">Duration</p>
-                <p className="font-medium text-gray-900 dark:text-white">{session.duration_minutes} minutes</p>
+                <p className="text-sm text-gray-500 dark:text-gray-400">
+                  Duration
+                </p>
+                <p className="font-medium text-gray-900 dark:text-white">
+                  {session.duration_minutes} minutes
+                </p>
               </div>
             </div>
 
@@ -190,8 +221,12 @@ export function SessionDetailView({ sessionId, onClose, onUpdate }: SessionDetai
               <div className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-700 rounded-lg">
                 <MapPin className="w-5 h-5 text-blue-600 dark:text-blue-400" />
                 <div>
-                  <p className="text-sm text-gray-500 dark:text-gray-400">Location</p>
-                  <p className="font-medium text-gray-900 dark:text-white">{session.location}</p>
+                  <p className="text-sm text-gray-500 dark:text-gray-400">
+                    Location
+                  </p>
+                  <p className="font-medium text-gray-900 dark:text-white">
+                    {session.location}
+                  </p>
                 </div>
               </div>
             )}
@@ -199,8 +234,12 @@ export function SessionDetailView({ sessionId, onClose, onUpdate }: SessionDetai
 
           {session.description && (
             <div>
-              <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400 mb-2">Description</h3>
-              <p className="text-gray-900 dark:text-white">{session.description}</p>
+              <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400 mb-2">
+                Description
+              </h3>
+              <p className="text-gray-900 dark:text-white">
+                {session.description}
+              </p>
             </div>
           )}
 
@@ -213,14 +252,18 @@ export function SessionDetailView({ sessionId, onClose, onUpdate }: SessionDetai
               <div className="space-y-2">
                 {session.meeting_platform && (
                   <div>
-                    <p className="text-xs text-gray-600 dark:text-gray-400">Platform</p>
+                    <p className="text-xs text-gray-600 dark:text-gray-400">
+                      Platform
+                    </p>
                     <p className="font-medium text-gray-900 dark:text-white capitalize">
-                      {session.meeting_platform.replace('_', ' ')}
+                      {session.meeting_platform.replace("_", " ")}
                     </p>
                   </div>
                 )}
                 <div>
-                  <p className="text-xs text-gray-600 dark:text-gray-400">Meeting Link</p>
+                  <p className="text-xs text-gray-600 dark:text-gray-400">
+                    Meeting Link
+                  </p>
                   <a
                     href={session.meeting_link}
                     target="_blank"
@@ -234,7 +277,9 @@ export function SessionDetailView({ sessionId, onClose, onUpdate }: SessionDetai
                   <div className="flex items-start gap-2">
                     <Lock className="w-4 h-4 text-gray-600 dark:text-gray-400 mt-0.5" />
                     <div>
-                      <p className="text-xs text-gray-600 dark:text-gray-400">Password</p>
+                      <p className="text-xs text-gray-600 dark:text-gray-400">
+                        Password
+                      </p>
                       <p className="font-mono text-sm font-medium text-gray-900 dark:text-white">
                         {session.meeting_password}
                       </p>
@@ -243,8 +288,12 @@ export function SessionDetailView({ sessionId, onClose, onUpdate }: SessionDetai
                 )}
                 {session.max_participants && (
                   <div>
-                    <p className="text-xs text-gray-600 dark:text-gray-400">Max Participants</p>
-                    <p className="font-medium text-gray-900 dark:text-white">{session.max_participants}</p>
+                    <p className="text-xs text-gray-600 dark:text-gray-400">
+                      Max Participants
+                    </p>
+                    <p className="font-medium text-gray-900 dark:text-white">
+                      {session.max_participants}
+                    </p>
                   </div>
                 )}
               </div>
@@ -271,7 +320,8 @@ export function SessionDetailView({ sessionId, onClose, onUpdate }: SessionDetai
                         Participant {participant.user_id.substring(0, 8)}...
                       </p>
                       <p className="text-xs text-gray-500 dark:text-gray-400">
-                        Joined {new Date(participant.joined_at).toLocaleDateString()}
+                        Joined{" "}
+                        {new Date(participant.joined_at).toLocaleDateString()}
                       </p>
                     </div>
                   </div>
@@ -282,13 +332,15 @@ export function SessionDetailView({ sessionId, onClose, onUpdate }: SessionDetai
 
           {isParticipant && (
             <div>
-              <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-3">Session Lobby</h3>
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-3">
+                Session Lobby
+              </h3>
               <SessionLobby sessionId={sessionId} />
             </div>
           )}
 
           <div className="flex gap-3 pt-4 border-t border-gray-200 dark:border-gray-700">
-            {!isParticipant && isUpcoming && session.status === 'scheduled' && (
+            {!isParticipant && isUpcoming && session.status === "scheduled" && (
               <button
                 onClick={handleJoinSession}
                 className="px-4 py-2 bg-blue-600 dark:bg-blue-500 text-white rounded-lg hover:bg-blue-700 dark:hover:bg-blue-600 transition-colors"
@@ -306,7 +358,7 @@ export function SessionDetailView({ sessionId, onClose, onUpdate }: SessionDetai
               </button>
             )}
 
-            {isCreator && isUpcoming && session.status === 'scheduled' && (
+            {isCreator && isUpcoming && session.status === "scheduled" && (
               <>
                 <button
                   onClick={handleCompleteSession}
