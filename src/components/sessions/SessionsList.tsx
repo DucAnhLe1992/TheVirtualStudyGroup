@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback } from "react";
+import { useNavigate } from "react-router-dom";
 import { supabase } from "../../lib/supabase";
 import { useAuth } from "../../contexts/AuthContext";
 import {
@@ -12,7 +13,6 @@ import {
   Video,
 } from "lucide-react";
 import { CreateSessionModal } from "./CreateSessionModal";
-import { SessionDetailView } from "./SessionDetailView";
 import { CalendarView } from "./CalendarView";
 import type { StudySession, StudyGroup } from "../../lib/types";
 
@@ -33,12 +33,10 @@ type SessionWithGroup = Pick<
 
 export function SessionsList() {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [sessions, setSessions] = useState<SessionWithGroup[]>([]);
   const [loading, setLoading] = useState(true);
   const [showCreateModal, setShowCreateModal] = useState(false);
-  const [selectedSessionId, setSelectedSessionId] = useState<string | null>(
-    null
-  );
   const [activeView, setActiveView] = useState<"upcoming" | "past">("upcoming");
   const [viewMode, setViewMode] = useState<"list" | "calendar">("list");
 
@@ -237,7 +235,7 @@ export function SessionsList() {
               {sessions.map((session) => (
                 <div
                   key={session.id}
-                  onClick={() => setSelectedSessionId(session.id)}
+                  onClick={() => navigate(`/sessions/${session.id}/lobby`)}
                   className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6 hover:shadow-md transition-all cursor-pointer"
                 >
                   <div className="flex items-start justify-between mb-3">
@@ -302,14 +300,6 @@ export function SessionsList() {
             setShowCreateModal(false);
             loadSessions();
           }}
-        />
-      )}
-
-      {selectedSessionId && (
-        <SessionDetailView
-          sessionId={selectedSessionId}
-          onClose={() => setSelectedSessionId(null)}
-          onUpdate={loadSessions}
         />
       )}
     </div>

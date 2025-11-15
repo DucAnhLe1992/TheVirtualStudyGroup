@@ -4,7 +4,6 @@ import { useAuth } from "../../contexts/AuthContext";
 import { Plus, Search, BookOpen } from "lucide-react";
 import { CreatePostModal } from "./CreatePostModal";
 import { PostCard } from "./PostCard";
-import { PostDetailView } from "./PostDetailView";
 import type { Post, Profile, StudyGroup } from "../../lib/types";
 
 type PostWithDetails = Post & {
@@ -19,7 +18,6 @@ export function PostsPage() {
   const [groups, setGroups] = useState<StudyGroup[]>([]);
   const [loading, setLoading] = useState(true);
   const [showCreateModal, setShowCreateModal] = useState(false);
-  const [selectedPostId, setSelectedPostId] = useState<string | null>(null);
   const [selectedGroupId, setSelectedGroupId] = useState<string>("all");
   const [searchQuery, setSearchQuery] = useState("");
   const [filterType, setFilterType] = useState<string>("all");
@@ -229,10 +227,7 @@ export function PostsPage() {
                       )}
                     </div>
                   )}
-                  <PostCard
-                    post={post as PostWithDetails}
-                    onClick={() => setSelectedPostId(post.id)}
-                  />
+                  <PostCard post={post as PostWithDetails} />
                 </div>
               ))
             )}
@@ -245,15 +240,6 @@ export function PostsPage() {
           groupId={groups[0].id}
           onClose={() => setShowCreateModal(false)}
           onSuccess={handlePostCreated}
-        />
-      )}
-
-      {selectedPostId && (
-        <PostDetailView
-          postId={selectedPostId}
-          groupId={posts.find((p) => p.id === selectedPostId)?.group_id || ""}
-          onClose={() => setSelectedPostId(null)}
-          onUpdate={loadPosts}
         />
       )}
     </div>

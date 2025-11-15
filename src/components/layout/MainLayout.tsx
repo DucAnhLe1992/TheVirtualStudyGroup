@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useNavigate, useLocation } from "react-router-dom";
 import { Header } from "./Header";
 import { Sidebar } from "./Sidebar";
 import { Dashboard } from "../dashboard/Dashboard";
@@ -13,15 +14,33 @@ import { PostsPage } from "../posts/PostsPage";
 import { ConnectionsPage } from "../connections/ConnectionsPage";
 
 export function MainLayout() {
-  const [activeTab, setActiveTab] = useState("dashboard");
+  const navigate = useNavigate();
+  const location = useLocation();
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+
+  const getActiveTab = () => {
+    const path = location.pathname;
+    if (path === '/' || path === '/dashboard') return 'dashboard';
+    if (path.startsWith('/groups')) return 'groups';
+    if (path.startsWith('/posts')) return 'posts';
+    if (path.startsWith('/sessions')) return 'sessions';
+    if (path.startsWith('/messages')) return 'messages';
+    if (path.startsWith('/resources')) return 'resources';
+    if (path.startsWith('/quizzes')) return 'quizzes';
+    if (path.startsWith('/achievements')) return 'achievements';
+    if (path.startsWith('/profile')) return 'profile';
+    if (path.startsWith('/connections')) return 'connections';
+    return 'dashboard';
+  };
+
+  const activeTab = getActiveTab();
 
   const renderContent = () => {
     switch (activeTab) {
       case "dashboard":
         return <Dashboard />;
       case "groups":
-        return <GroupsList onNavigate={setActiveTab} />;
+        return <GroupsList onNavigate={(tab) => navigate(`/${tab}`)} />;
       case "posts":
         return <PostsPage />;
       case "connections":
@@ -50,7 +69,7 @@ export function MainLayout() {
         <Sidebar
           activeTab={activeTab}
           onTabChange={(tab) => {
-            setActiveTab(tab);
+            navigate(`/${tab}`);
             setIsSidebarOpen(false);
           }}
           isOpen={isSidebarOpen}

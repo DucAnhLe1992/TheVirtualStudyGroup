@@ -4,7 +4,6 @@ import { useAuth } from "../../contexts/AuthContext";
 import { Plus, Search, Globe } from "lucide-react";
 import { CreateGroupModal } from "./CreateGroupModal";
 import { GroupCard } from "./GroupCard";
-import { EnhancedGroupDetailModal } from "./EnhancedGroupDetailModal";
 import type { StudyGroup } from "../../lib/types";
 
 interface GroupsListProps {
@@ -17,7 +16,6 @@ export function GroupsList({ onNavigate }: GroupsListProps) {
   const [publicGroups, setPublicGroups] = useState<StudyGroup[]>([]);
   const [loading, setLoading] = useState(true);
   const [showCreateModal, setShowCreateModal] = useState(false);
-  const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
   const [activeView, setActiveView] = useState<"my-groups" | "discover">(
     "my-groups"
   );
@@ -181,11 +179,7 @@ export function GroupsList({ onNavigate }: GroupsListProps) {
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {groups.map((group) => (
-              <GroupCard
-                key={group.id}
-                group={group}
-                onClick={() => setSelectedGroupId(group.id)}
-              />
+              <GroupCard key={group.id} group={group} />
             ))}
           </div>
         )
@@ -253,15 +247,6 @@ export function GroupsList({ onNavigate }: GroupsListProps) {
         <CreateGroupModal
           onClose={() => setShowCreateModal(false)}
           onSuccess={handleGroupCreated}
-        />
-      )}
-
-      {selectedGroupId && (
-        <EnhancedGroupDetailModal
-          groupId={selectedGroupId}
-          onClose={() => setSelectedGroupId(null)}
-          onUpdate={loadGroups}
-          onNavigate={onNavigate}
         />
       )}
     </div>

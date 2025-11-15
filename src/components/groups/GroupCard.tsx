@@ -1,3 +1,4 @@
+import { useNavigate } from "react-router-dom";
 import { Lock, Globe, Calendar } from "lucide-react";
 import type { StudyGroup } from "../../lib/types";
 
@@ -7,6 +8,8 @@ interface GroupCardProps {
 }
 
 export function GroupCard({ group, onClick }: GroupCardProps) {
+  const navigate = useNavigate();
+  
   const formatDate = (date: string) => {
     return new Date(date).toLocaleDateString("en-US", {
       month: "short",
@@ -15,9 +18,17 @@ export function GroupCard({ group, onClick }: GroupCardProps) {
     });
   };
 
+  const handleClick = () => {
+    if (onClick) {
+      onClick();
+    } else {
+      navigate(`/groups/${group.id}`);
+    }
+  };
+
   return (
     <div
-      onClick={onClick}
+      onClick={handleClick}
       className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6 hover:shadow-md transition-all cursor-pointer"
     >
       <div className="flex items-start justify-between mb-4">

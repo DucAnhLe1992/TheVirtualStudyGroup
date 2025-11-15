@@ -1,3 +1,4 @@
+import { useNavigate } from "react-router-dom";
 import {
   Heart,
   MessageCircle,
@@ -10,7 +11,7 @@ import type { PostWithDetails } from "../../lib/types";
 
 interface PostCardProps {
   post: PostWithDetails;
-  onClick: () => void;
+  onClick?: () => void;
 }
 
 const postTypeConfig = {
@@ -41,14 +42,23 @@ const postTypeConfig = {
 // Reaction icons are rendered conditionally below; no mapping needed here.
 
 export function PostCard({ post, onClick }: PostCardProps) {
+  const navigate = useNavigate();
   const typeConfig = postTypeConfig[post.post_type];
   const totalReactions = post.reaction_counts
     ? Object.values(post.reaction_counts).reduce((sum, count) => sum + count, 0)
     : 0;
 
+  const handleClick = () => {
+    if (onClick) {
+      onClick();
+    } else {
+      navigate(`/posts/${post.id}`);
+    }
+  };
+
   return (
     <div
-      onClick={onClick}
+      onClick={handleClick}
       className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6 hover:shadow-md hover:border-blue-300 dark:hover:border-blue-600 transition-all cursor-pointer"
     >
       <div className="flex items-start gap-4">
