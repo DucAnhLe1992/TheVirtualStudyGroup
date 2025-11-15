@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { supabase } from "../../lib/supabase";
 import { useAuth } from "../../contexts/AuthContext";
-import { Send, Users, MessageCircle } from "lucide-react";
+import { Send, Users, MessageCircle, ArrowLeft } from "lucide-react";
 import type { Connection, Profile } from "../../lib/types";
 
 type DirectMessage = {
@@ -199,7 +199,9 @@ export function DirectMessagesPage() {
     <div className="h-[calc(100vh-16rem)]">
       <div className="flex gap-4 h-full">
         {/* Conversations List */}
-        <div className="w-80 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 overflow-y-auto">
+        <div className={`${
+          selectedUser ? 'hidden md:block' : 'block'
+        } w-full md:w-80 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 overflow-y-auto`}>
           <div className="p-4 border-b border-gray-200 dark:border-gray-700">
             <h2 className="font-semibold text-gray-900 dark:text-white">
               Conversations
@@ -253,11 +255,19 @@ export function DirectMessagesPage() {
         </div>
 
         {/* Chat Area */}
-        <div className="flex-1 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 flex flex-col">
+        <div className={`${
+          selectedUser ? 'block' : 'hidden md:block'
+        } flex-1 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 flex flex-col`}>
           {selectedUser ? (
             <>
               <div className="p-4 border-b border-gray-200 dark:border-gray-700">
                 <div className="flex items-center gap-3">
+                  <button
+                    onClick={() => setSelectedUser(null)}
+                    className="md:hidden p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+                  >
+                    <ArrowLeft className="w-5 h-5 text-gray-600 dark:text-gray-400" />
+                  </button>
                   <div className="w-10 h-10 bg-blue-100 dark:bg-blue-900 rounded-full flex items-center justify-center">
                     <Users className="w-5 h-5 text-blue-600 dark:text-blue-300" />
                   </div>

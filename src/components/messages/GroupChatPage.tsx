@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState, useRef } from "react";
 import { supabase } from "../../lib/supabase";
 import { useAuth } from "../../contexts/AuthContext";
-import { MessageSquare, Send, Reply, Trash2 } from "lucide-react";
+import { MessageSquare, Send, Reply, Trash2, ArrowLeft } from "lucide-react";
 import type { RealtimeChannel } from "@supabase/supabase-js";
 import type { Message, StudyGroup } from "../../lib/types";
 
@@ -13,7 +13,7 @@ type MessageWithParent = Message & {
   };
 };
 
-export function MessagesList() {
+export function GroupChatPage() {
   const { user } = useAuth();
   const [groups, setGroups] = useState<StudyGroup[]>([]);
   const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
@@ -43,13 +43,10 @@ export function MessagesList() {
         .map((m) => m.study_groups)
         .filter(Boolean) as StudyGroup[];
       setGroups(groupsData);
-      if (groupsData.length > 0 && !selectedGroupId) {
-        setSelectedGroupId(groupsData[0].id);
-      }
     }
 
     setLoading(false);
-  }, [user, selectedGroupId]);
+  }, [user]);
 
   const loadMessages = useCallback(async () => {
     if (!selectedGroupId) return;
@@ -203,7 +200,10 @@ export function MessagesList() {
 
   return (
     <div className="flex h-[calc(100vh-12rem)] gap-4">
-      <div className="w-64 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4 overflow-y-auto transition-colors">
+      {/* Groups List */}
+      <div className={`${
+        selectedGroupId ? 'hidden md:block' : 'block'
+      } w-full md:w-64 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4 overflow-y-auto`}>
         <h3 className="font-semibold text-gray-900 dark:text-white mb-3">
           Your Groups
         </h3>
@@ -227,12 +227,25 @@ export function MessagesList() {
         </div>
       </div>
 
-      <div className="flex-1 flex flex-col bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 transition-colors">
+      {/* Chat Area */}
+      <div className={`${
+        selectedGroupId ? 'block' : 'hidden md:block'
+      } flex-1 flex flex-col bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 transition-colors`}>
         <div className="p-4 border-b border-gray-200 dark:border-gray-700">
-          <h3 className="font-semibold text-gray-900 dark:text-white">
-            {selectedGroup?.name}
-          </h3>
-          <p className="text-sm text-gray-500 dark:text-gray-400">Group Chat</p>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => setSelectedGroupId(null)}
+              className="md:hidden p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+            >
+              <ArrowLeft className="w-5 h-5 text-gray-600 dark:text-gray-400" />
+            </button>
+            <div className="flex-1">
+              <h3 className="font-semibold text-gray-900 dark:text-white">
+                {selectedGroup?.name}
+              </h3>
+              <p className="text-sm text-gray-500 dark:text-gray-400">Group Chat</p>
+            </div>
+          </div>
         </div>
 
         <div className="flex-1 overflow-y-auto p-4 space-y-4">
