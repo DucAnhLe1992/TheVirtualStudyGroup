@@ -5,6 +5,7 @@ import { MainLayout } from './components/layout/MainLayout';
 import { PostPage } from './pages/PostPage';
 import { GroupPage } from './pages/GroupPage';
 import { SessionLobbyPage } from './pages/SessionLobbyPage';
+import { DiscussionPage } from './pages/DiscussionPage';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
@@ -39,6 +40,7 @@ function AppContent() {
       <Route path="/dashboard" element={<ProtectedRoute><MainLayout /></ProtectedRoute>} />
       <Route path="/groups" element={<ProtectedRoute><MainLayout /></ProtectedRoute>} />
       <Route path="/posts" element={<ProtectedRoute><MainLayout /></ProtectedRoute>} />
+      <Route path="/discussions" element={<ProtectedRoute><MainLayout /></ProtectedRoute>} />
       <Route path="/sessions" element={<ProtectedRoute><MainLayout /></ProtectedRoute>} />
       <Route path="/messages" element={<ProtectedRoute><MainLayout /></ProtectedRoute>} />
       <Route path="/resources" element={<ProtectedRoute><MainLayout /></ProtectedRoute>} />
@@ -49,6 +51,7 @@ function AppContent() {
       
       {/* Dedicated pages */}
       <Route path="/posts/:postId" element={<ProtectedRoute><PostPage /></ProtectedRoute>} />
+      <Route path="/discussions/:discussionId" element={<ProtectedRoute><DiscussionPage /></ProtectedRoute>} />
       <Route path="/groups/:groupId" element={<ProtectedRoute><GroupPage /></ProtectedRoute>} />
       <Route path="/sessions/:sessionId/lobby" element={<ProtectedRoute><SessionLobbyPage /></ProtectedRoute>} />
       

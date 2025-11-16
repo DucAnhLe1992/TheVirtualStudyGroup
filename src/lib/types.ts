@@ -131,6 +131,9 @@ export type Post = {
     | "announcement"
     | "solution";
   is_pinned: boolean;
+  vote_count: number;
+  view_count: number;
+  best_answer_comment_id: string | null;
   created_at: string;
   updated_at: string;
   edited_at: string | null;
@@ -150,6 +153,8 @@ export type Comment = {
   author_id: string;
   content: string;
   parent_comment_id: string | null;
+  vote_count: number;
+  is_best_answer: boolean;
   created_at: string;
   updated_at: string;
   edited_at: string | null;
@@ -198,3 +203,19 @@ export type ConnectionStatus =
   | "pending_sent"
   | "pending_received"
   | "connected";
+
+export type PostVote = {
+  id: string;
+  post_id: string;
+  user_id: string;
+  vote_type: "up" | "down";
+  created_at: string;
+};
+
+export type CommentVote = {
+  id: string;
+  comment_id: string;
+  user_id: string;
+  vote_type: "up" | "down";
+  created_at: string;
+};

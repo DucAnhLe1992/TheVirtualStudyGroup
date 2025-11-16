@@ -3,23 +3,23 @@ import { supabase } from "../../lib/supabase";
 import { useAuth } from "../../contexts/AuthContext";
 import { X, AlertCircle } from "lucide-react";
 
-interface CreatePostModalProps {
+interface CreateDiscussionModalProps {
   groupId: string;
   onClose: () => void;
   onSuccess: () => void;
 }
 
-export function CreatePostModal({
+export function CreateDiscussionModal({
   groupId,
   onClose,
   onSuccess,
-}: CreatePostModalProps) {
+}: CreateDiscussionModalProps) {
   const { user } = useAuth();
   const [title, setTitle] = useState("");
   const [content, setContent] = useState("");
-  const [postType, setPostType] = useState<"article" | "announcement">(
-    "article"
-  );
+  const [postType, setPostType] = useState<
+    "question" | "discussion" | "solution"
+  >("discussion");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -60,7 +60,7 @@ export function CreatePostModal({
       <div className="bg-white dark:bg-gray-800 rounded-lg max-w-2xl w-full p-6 transition-colors">
         <div className="flex items-center justify-between mb-6">
           <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
-            Create Post
+            Start a Discussion
           </h2>
           <button
             onClick={onClose}
@@ -83,24 +83,29 @@ export function CreatePostModal({
               htmlFor="postType"
               className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
             >
-              Post Type
+              Discussion Type
             </label>
             <select
               id="postType"
               value={postType}
               onChange={(e) =>
-                setPostType(e.target.value as "article" | "announcement")
+                setPostType(
+                  e.target.value as "question" | "discussion" | "solution"
+                )
               }
               className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400"
             >
-              <option value="article">Article / Study Guide</option>
-              <option value="announcement">Announcement</option>
+              <option value="discussion">General Discussion</option>
+              <option value="question">Question (Q&A)</option>
+              <option value="solution">Solution/Answer</option>
             </select>
             <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-              {postType === "article" &&
-                "Share detailed knowledge, study notes, or tutorials"}
-              {postType === "announcement" &&
-                "Important information or updates for the group"}
+              {postType === "question" &&
+                "Ask for help - community can vote and mark best answers"}
+              {postType === "discussion" &&
+                "Share thoughts and start conversations"}
+              {postType === "solution" &&
+                "Share solutions or answers to common problems"}
             </p>
           </div>
 
@@ -119,7 +124,11 @@ export function CreatePostModal({
               required
               maxLength={200}
               className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400"
-              placeholder="Give your post a clear, descriptive title..."
+              placeholder={
+                postType === "question"
+                  ? "What's your question?"
+                  : "What would you like to discuss?"
+              }
             />
           </div>
 
@@ -128,19 +137,19 @@ export function CreatePostModal({
               htmlFor="content"
               className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
             >
-              Content *
+              Details *
             </label>
             <textarea
               id="content"
               value={content}
               onChange={(e) => setContent(e.target.value)}
               required
-              rows={12}
-              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 font-mono text-sm"
-              placeholder="Write your post content here. You can use plain text or markdown formatting..."
+              rows={8}
+              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400"
+              placeholder="Provide more details, context, or what you've tried..."
             />
             <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-              Tip: Use markdown for formatting (**, *, `, etc.)
+              Be clear and specific to get better responses
             </p>
           </div>
 
@@ -157,7 +166,7 @@ export function CreatePostModal({
               disabled={loading}
               className="flex-1 px-4 py-2 bg-blue-600 dark:bg-blue-500 text-white rounded-lg hover:bg-blue-700 dark:hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             >
-              {loading ? "Publishing..." : "Publish Post"}
+              {loading ? "Posting..." : "Post Discussion"}
             </button>
           </div>
         </form>

@@ -9,7 +9,8 @@ import {
   Award,
   X,
   BookOpen,
-  UserCheck,
+  GroupIcon,
+  MessageCircle,
 } from "lucide-react";
 
 interface SidebarProps {
@@ -27,14 +28,15 @@ export function Sidebar({
 }: SidebarProps) {
   const tabs = [
     { id: "dashboard", label: "Dashboard", icon: Home },
-    { id: "groups", label: "My Groups", icon: Users },
+    { id: "groups", label: "Groups", icon: GroupIcon },
     { id: "posts", label: "Posts", icon: BookOpen },
+    { id: "discussions", label: "Discussions", icon: MessageCircle },
     { id: "sessions", label: "Sessions", icon: Calendar },
     { id: "messages", label: "Messages", icon: MessageSquare },
     { id: "resources", label: "Resources", icon: FileText },
     { id: "quizzes", label: "Quizzes", icon: Trophy },
     { id: "achievements", label: "Achievements", icon: Award },
-    { id: "connections", label: "Connections", icon: UserCheck },
+    { id: "connections", label: "Connections", icon: Users },
     { id: "profile", label: "Profile", icon: User },
   ];
 

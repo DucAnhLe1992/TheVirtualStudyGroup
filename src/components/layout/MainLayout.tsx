@@ -11,6 +11,7 @@ import { QuizzesList } from "../quizzes/QuizzesList";
 import { ProfilePage } from "../profile/ProfilePage";
 import { AchievementsPage } from "../achievements/AchievementsPage";
 import { PostsPage } from "../posts/PostsPage";
+import { DiscussionsPage } from "../discussions/DiscussionsPage";
 import { ConnectionsPage } from "../connections/ConnectionsPage";
 
 export function MainLayout() {
@@ -23,6 +24,7 @@ export function MainLayout() {
     if (path === '/' || path === '/dashboard') return 'dashboard';
     if (path.startsWith('/groups')) return 'groups';
     if (path.startsWith('/posts')) return 'posts';
+    if (path.startsWith('/discussions')) return 'discussions';
     if (path.startsWith('/sessions')) return 'sessions';
     if (path.startsWith('/messages')) return 'messages';
     if (path.startsWith('/resources')) return 'resources';
@@ -43,6 +45,8 @@ export function MainLayout() {
         return <GroupsList onNavigate={(tab) => navigate(`/${tab}`)} />;
       case "posts":
         return <PostsPage />;
+      case "discussions":
+        return <DiscussionsPage />;
       case "connections":
         return <ConnectionsPage />;
       case "sessions":
