@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { supabase } from "../../lib/supabase";
 import { useAuth } from "../../contexts/AuthContext";
 import {
@@ -12,6 +12,9 @@ import {
   Trash2,
   Pin,
   User,
+  ArrowUp,
+  ArrowDown,
+  CheckCircle,
 } from "lucide-react";
 import type {
   Post,
@@ -48,6 +51,8 @@ export function PostDetailView({
   const [commentText, setCommentText] = useState("");
   const [replyingTo, setReplyingTo] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
+  const [userPostVote, setUserPostVote] = useState<"up" | "down" | null>(null);
+  const [userCommentVotes, setUserCommentVotes] = useState<Record<string, "up" | "down" | null>>({});
 
   const loadPostDetails = useCallback(async () => {
     const commentIdsRes = await supabase
@@ -107,8 +112,37 @@ export function PostDetailView({
       setComments(rootComments);
     }
 
+    // Load current user's vote state after core data
+    if (user) {
+      const [postVoteRes, commentVotesRes] = await Promise.all([
+        supabase
+          .from("post_votes")
+          .select("vote_type")
+          .eq("post_id", postId)
+          .eq("user_id", user.id)
+          .maybeSingle(),
+        commentIds.length
+          ? supabase
+              .from("comment_votes")
+              .select("comment_id, vote_type")
+              .eq("user_id", user.id)
+              .in("comment_id", commentIds)
+          : Promise.resolve({ data: null }),
+      ]);
+
+      const pv = (postVoteRes?.data as { vote_type: "up" | "down" } | null) || null;
+      setUserPostVote(pv ? pv.vote_type : null);
+
+      const cmap: Record<string, "up" | "down" | null> = {};
+      const cvData = (commentVotesRes?.data as Array<{ comment_id: string; vote_type: "up" | "down" }> | null) || [];
+      cvData.forEach((row) => {
+        cmap[row.comment_id] = row.vote_type;
+      });
+      setUserCommentVotes(cmap);
+    }
+
     setLoading(false);
-  }, [postId]);
+  }, [postId, user]);
 
   const subscribeToComments = useCallback(() => {
     const channel = supabase
@@ -242,6 +276,93 @@ export function PostDetailView({
     }
   };
 
+  const isDiscussionType = useMemo(() => {
+    if (!post) return false;
+    return ["question", "discussion", "solution"].includes(post.post_type);
+  }, [post]);
+
+  const handlePostVote = async (vote: "up" | "down") => {
+    if (!user || !post) return;
+    const prev = userPostVote;
+
+    if (prev === vote) {
+      await supabase
+        .from("post_votes")
+        .delete()
+        .eq("post_id", post.id)
+        .eq("user_id", user.id);
+      setUserPostVote(null);
+      setPost({ ...post, vote_count: (post.vote_count || 0) + (vote === "up" ? -1 : 1) });
+      return;
+    }
+
+    // @ts-expect-error - Supabase upsert types not properly inferred
+    await supabase.from("post_votes").upsert(
+      { post_id: post.id, user_id: user.id, vote_type: vote },
+      { onConflict: "post_id,user_id" }
+    );
+    setUserPostVote(vote);
+    let delta = 0;
+    if (!prev) delta = vote === "up" ? 1 : -1;
+    else delta = vote === "up" ? 2 : -2;
+    setPost({ ...post, vote_count: (post.vote_count || 0) + delta });
+  };
+
+  const handleCommentVote = async (commentId: string, vote: "up" | "down") => {
+    if (!user) return;
+    const prev = userCommentVotes[commentId] || null;
+    const updateCommentCount = (delta: number) => {
+      const update = (list: CommentWithAuthor[]): CommentWithAuthor[] =>
+        list.map((c) => {
+          if (c.id === commentId) {
+            return { ...c, vote_count: (c.vote_count || 0) + delta };
+          }
+          return { ...c, replies: c.replies ? update(c.replies) : c.replies };
+        });
+      setComments((prevComments) => update(prevComments));
+    };
+
+    if (prev === vote) {
+      await supabase
+        .from("comment_votes")
+        .delete()
+        .eq("comment_id", commentId)
+        .eq("user_id", user.id);
+      const next = { ...userCommentVotes };
+      next[commentId] = null;
+      setUserCommentVotes(next);
+      updateCommentCount(vote === "up" ? -1 : 1);
+      return;
+    }
+
+    // @ts-expect-error - Supabase upsert types not properly inferred
+    await supabase.from("comment_votes").upsert(
+      { comment_id: commentId, user_id: user.id, vote_type: vote },
+      { onConflict: "comment_id,user_id" }
+    );
+    const next = { ...userCommentVotes };
+    next[commentId] = vote;
+    setUserCommentVotes(next);
+    let delta = 0;
+    if (!prev) delta = vote === "up" ? 1 : -1;
+    else delta = vote === "up" ? 2 : -2;
+    updateCommentCount(delta);
+  };
+
+  const markBestAnswer = async (commentId: string) => {
+    if (!user || !post) return;
+    // @ts-expect-error - Supabase RPC types not generated
+    await supabase.rpc("mark_best_answer", { post_uuid: post.id, comment_uuid: commentId });
+    await loadPostDetails();
+  };
+
+  const unmarkBestAnswer = async () => {
+    if (!user || !post) return;
+    // @ts-expect-error - Supabase RPC types not generated
+    await supabase.rpc("unmark_best_answer", { post_uuid: post.id });
+    await loadPostDetails();
+  };
+
   const renderComment = (comment: CommentWithAuthor, depth = 0) => {
     const commentLikes = commentReactions.filter(
       (r) => r.comment_id === comment.id && r.reaction_type === "like"
@@ -262,10 +383,39 @@ export function PostDetailView({
         r.reaction_type === "helpful"
     );
 
+    const userVote = userCommentVotes[comment.id] || null;
+    const voteCount = comment.vote_count ?? 0;
+    const isBest = post?.best_answer_comment_id === comment.id;
+
     return (
       <div key={comment.id} className={`${depth > 0 ? "ml-8 mt-4" : "mt-4"}`}>
         <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-4">
           <div className="flex items-start gap-3">
+            {isDiscussionType && (
+              <div className="flex flex-col items-center gap-1 mr-2">
+                <button
+                  onClick={() => handleCommentVote(comment.id, "up")}
+                  className={`p-1 rounded hover:bg-gray-200 dark:hover:bg-gray-600 ${
+                    userVote === "up" ? "text-blue-600 dark:text-blue-400" : "text-gray-500 dark:text-gray-400"
+                  }`}
+                  title="Upvote"
+                >
+                  <ArrowUp className="w-4 h-4" />
+                </button>
+                <div className="text-xs text-gray-600 dark:text-gray-300 font-medium min-w-[1.5rem] text-center">
+                  {voteCount}
+                </div>
+                <button
+                  onClick={() => handleCommentVote(comment.id, "down")}
+                  className={`p-1 rounded hover:bg-gray-200 dark:hover:bg-gray-600 ${
+                    userVote === "down" ? "text-blue-600 dark:text-blue-400" : "text-gray-500 dark:text-gray-400"
+                  }`}
+                  title="Downvote"
+                >
+                  <ArrowDown className="w-4 h-4" />
+                </button>
+              </div>
+            )}
             <div className="w-8 h-8 bg-blue-100 dark:bg-blue-900 rounded-full flex items-center justify-center flex-shrink-0">
               <User className="w-4 h-4 text-blue-600 dark:text-blue-300" />
             </div>
@@ -280,6 +430,11 @@ export function PostDetailView({
                 {comment.edited_at && (
                   <span className="text-xs text-gray-500 dark:text-gray-400">
                     edited
+                  </span>
+                )}
+                {isBest && (
+                  <span className="inline-flex items-center gap-1 text-xs text-green-600 dark:text-green-400 ml-2">
+                    <CheckCircle className="w-3.5 h-3.5" /> Best Answer
                   </span>
                 )}
               </div>
@@ -329,6 +484,23 @@ export function PostDetailView({
                     Delete
                   </button>
                 )}
+                {isDiscussionType && post?.post_type === "question" && post?.author_id === user?.id && (
+                  isBest ? (
+                    <button
+                      onClick={unmarkBestAnswer}
+                      className="text-xs text-green-600 dark:text-green-400 hover:text-green-700 dark:hover:text-green-300 transition-colors"
+                    >
+                      Unmark Best Answer
+                    </button>
+                  ) : !post?.best_answer_comment_id ? (
+                    <button
+                      onClick={() => markBestAnswer(comment.id)}
+                      className="text-xs text-green-600 dark:text-green-400 hover:text-green-700 dark:hover:text-green-300 transition-colors"
+                    >
+                      Mark as Best Answer
+                    </button>
+                  ) : null
+                )}
               </div>
             </div>
           </div>
@@ -377,6 +549,11 @@ export function PostDetailView({
             <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
               {post.title}
             </h2>
+            {isDiscussionType && !!post.best_answer_comment_id && (
+              <span className="inline-flex items-center gap-1 text-sm text-green-600 dark:text-green-400 ml-2">
+                <CheckCircle className="w-4 h-4" /> Answered
+              </span>
+            )}
           </div>
           <button
             onClick={onClose}
@@ -389,6 +566,31 @@ export function PostDetailView({
         <div className="p-6 max-h-[70vh] overflow-y-auto">
           <div className="mb-6">
             <div className="flex items-center gap-3 mb-4">
+              {isDiscussionType && (
+                <div className="flex flex-col items-center gap-1 mr-1">
+                  <button
+                    onClick={() => handlePostVote("up")}
+                    className={`p-2 rounded hover:bg-gray-100 dark:hover:bg-gray-700 ${
+                      userPostVote === "up" ? "text-blue-600 dark:text-blue-400" : "text-gray-600 dark:text-gray-400"
+                    }`}
+                    title="Upvote"
+                  >
+                    <ArrowUp className="w-5 h-5" />
+                  </button>
+                  <div className="text-sm text-gray-700 dark:text-gray-300 font-semibold min-w-[2rem] text-center">
+                    {post.vote_count || 0}
+                  </div>
+                  <button
+                    onClick={() => handlePostVote("down")}
+                    className={`p-2 rounded hover:bg-gray-100 dark:hover:bg-gray-700 ${
+                      userPostVote === "down" ? "text-blue-600 dark:text-blue-400" : "text-gray-600 dark:text-gray-400"
+                    }`}
+                    title="Downvote"
+                  >
+                    <ArrowDown className="w-5 h-5" />
+                  </button>
+                </div>
+              )}
               <div className="w-10 h-10 bg-blue-100 dark:bg-blue-900 rounded-full flex items-center justify-center">
                 <User className="w-5 h-5 text-blue-600 dark:text-blue-300" />
               </div>

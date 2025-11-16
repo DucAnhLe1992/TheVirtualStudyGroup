@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
 import { supabase } from "../../lib/supabase";
 import { useAuth } from "../../contexts/AuthContext";
 import { Plus, Search, MessageSquare, TrendingUp, Clock } from "lucide-react";
@@ -14,6 +15,8 @@ type PostWithDetails = Post & {
 
 export function DiscussionsPage() {
   const { user } = useAuth();
+  const location = useLocation();
+  const navigate = useNavigate();
   const [discussions, setDiscussions] = useState<PostWithDetails[]>([]);
   const [groups, setGroups] = useState<StudyGroup[]>([]);
   const [loading, setLoading] = useState(true);
@@ -22,6 +25,7 @@ export function DiscussionsPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [filterType, setFilterType] = useState<string>("all");
   const [sortBy, setSortBy] = useState<"recent" | "hot" | "votes">("recent");
+  const [answeredFilter, setAnsweredFilter] = useState<"all" | "answered" | "unanswered">("all");
 
   const loadUserGroups = useCallback(async () => {
     if (!user) return;
@@ -78,6 +82,15 @@ export function DiscussionsPage() {
       query = query.eq("post_type", filterType);
     }
 
+    // Filter by answered state
+    if (answeredFilter === "answered") {
+      // best_answer_comment_id IS NOT NULL
+      query = query.not("best_answer_comment_id", "is", null);
+    } else if (answeredFilter === "unanswered") {
+      // best_answer_comment_id IS NULL
+      query = query.is("best_answer_comment_id", null);
+    }
+
     // Search
     if (searchQuery) {
       query = query.or(
@@ -113,15 +126,23 @@ export function DiscussionsPage() {
     }
 
     setLoading(false);
-  }, [user, selectedGroupId, searchQuery, filterType, sortBy]);
+  }, [user, selectedGroupId, searchQuery, filterType, sortBy, answeredFilter]);
 
   useEffect(() => {
     loadUserGroups();
   }, [loadUserGroups]);
 
+  const skipFirstLoadRef = useRef(false);
+
   useEffect(() => {
+    const noRefresh = (location.state as { noRefresh?: boolean } | null)?.noRefresh;
+    if (noRefresh && !skipFirstLoadRef.current) {
+      skipFirstLoadRef.current = true;
+      navigate(location.pathname, { replace: true });
+      return;
+    }
     loadDiscussions();
-  }, [loadDiscussions]);
+  }, [loadDiscussions, location.pathname, location.state, navigate]);
 
   const handleDiscussionCreated = () => {
     setShowCreateModal(false);
@@ -205,6 +226,16 @@ export function DiscussionsPage() {
                 <option value="question">Questions</option>
                 <option value="discussion">Discussions</option>
                 <option value="solution">Solutions</option>
+              </select>
+
+              <select
+                value={answeredFilter}
+                onChange={(e) => setAnsweredFilter(e.target.value as "all" | "answered" | "unanswered")}
+                className="px-4 py-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400"
+              >
+                <option value="all">All States</option>
+                <option value="answered">Answered</option>
+                <option value="unanswered">Unanswered</option>
               </select>
             </div>
 

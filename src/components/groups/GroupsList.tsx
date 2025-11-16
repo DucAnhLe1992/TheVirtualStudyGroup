@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
 import { supabase } from "../../lib/supabase";
 import { useAuth } from "../../contexts/AuthContext";
 import { Plus, Search, Globe } from "lucide-react";
@@ -12,6 +13,8 @@ interface GroupsListProps {
 
 export function GroupsList({ onNavigate }: GroupsListProps) {
   const { user } = useAuth();
+  const location = useLocation();
+  const navigate = useNavigate();
   const [groups, setGroups] = useState<StudyGroup[]>([]);
   const [publicGroups, setPublicGroups] = useState<StudyGroup[]>([]);
   const [loading, setLoading] = useState(true);
@@ -79,9 +82,17 @@ export function GroupsList({ onNavigate }: GroupsListProps) {
     setLoading(false);
   }, [user, activeView, searchQuery]);
 
+  const skipFirstLoadRef = useRef(false);
+
   useEffect(() => {
+    const noRefresh = (location.state as { noRefresh?: boolean } | null)?.noRefresh;
+    if (noRefresh && !skipFirstLoadRef.current) {
+      skipFirstLoadRef.current = true;
+      navigate(location.pathname, { replace: true });
+      return;
+    }
     loadGroups();
-  }, [loadGroups]);
+  }, [loadGroups, location.pathname, location.state, navigate]);
 
   const handleGroupCreated = () => {
     setShowCreateModal(false);

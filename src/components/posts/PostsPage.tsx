@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
 import { supabase } from "../../lib/supabase";
 import { useAuth } from "../../contexts/AuthContext";
 import { Plus, Search, BookOpen } from "lucide-react";
@@ -14,6 +15,8 @@ type PostWithDetails = Post & {
 
 export function PostsPage() {
   const { user } = useAuth();
+  const location = useLocation();
+  const navigate = useNavigate();
   const [posts, setPosts] = useState<PostWithDetails[]>([]);
   const [groups, setGroups] = useState<StudyGroup[]>([]);
   const [loading, setLoading] = useState(true);
@@ -112,9 +115,18 @@ export function PostsPage() {
     loadUserGroups();
   }, [loadUserGroups]);
 
+  const skipFirstLoadRef = useRef(false);
+
   useEffect(() => {
+    const noRefresh = (location.state as { noRefresh?: boolean } | null)?.noRefresh;
+    if (noRefresh && !skipFirstLoadRef.current) {
+      skipFirstLoadRef.current = true;
+      // clear state to avoid future skips
+      navigate(location.pathname, { replace: true });
+      return;
+    }
     loadPosts();
-  }, [loadPosts]);
+  }, [loadPosts, location.pathname, location.state, navigate]);
 
   const handlePostCreated = () => {
     setShowCreateModal(false);

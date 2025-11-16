@@ -15,7 +15,7 @@ export function DiscussionPage() {
   }
 
   const handleClose = () => {
-    navigate('/discussions');
+    navigate('/discussions', { state: { noRefresh: true } });
   };
 
   return (

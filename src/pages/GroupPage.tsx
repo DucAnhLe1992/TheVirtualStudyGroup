@@ -15,7 +15,7 @@ export function GroupPage() {
   }
 
   const handleClose = () => {
-    navigate('/groups');
+    navigate('/groups', { state: { noRefresh: true } });
   };
 
   return (

@@ -1,11 +1,5 @@
 import { useNavigate } from "react-router-dom";
-import {
-  MessageCircle,
-  ArrowUp,
-  CheckCircle,
-  Eye,
-  Pin,
-} from "lucide-react";
+import { MessageCircle, ArrowUp, Eye, Pin, CheckCircle } from "lucide-react";
 import type { PostWithDetails } from "../../lib/types";
 
 interface DiscussionCardProps {
@@ -36,7 +30,7 @@ export function DiscussionCard({ discussion, onClick }: DiscussionCardProps) {
     discussionTypeConfig[
       discussion.post_type as keyof typeof discussionTypeConfig
     ];
-  const hasAnswer = discussion.best_answer_comment_id !== null;
+  const hasAnswer = !!discussion.best_answer_comment_id;
 
   const handleClick = () => {
     if (onClick) {

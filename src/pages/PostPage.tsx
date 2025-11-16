@@ -15,7 +15,7 @@ export function PostPage() {
   }
 
   const handleClose = () => {
-    navigate('/posts');
+    navigate('/posts', { state: { noRefresh: true } });
   };
 
   return (

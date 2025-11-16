@@ -36,6 +36,9 @@
     - View count increment function
 */
 
+-- Ensure pgcrypto extension is available for gen_random_uuid()
+CREATE EXTENSION IF NOT EXISTS pgcrypto;
+
 -- Add new columns to posts table
 ALTER TABLE posts 
   ADD COLUMN IF NOT EXISTS vote_count integer DEFAULT 0,
@@ -46,6 +49,11 @@ ALTER TABLE posts
 ALTER TABLE comments
   ADD COLUMN IF NOT EXISTS vote_count integer DEFAULT 0,
   ADD COLUMN IF NOT EXISTS is_best_answer boolean DEFAULT false;
+
+-- Enforce at most one best answer per post
+CREATE UNIQUE INDEX IF NOT EXISTS one_best_answer_per_post
+ON comments(post_id)
+WHERE is_best_answer;
 
 -- Create post_votes table
 CREATE TABLE IF NOT EXISTS post_votes (
@@ -225,6 +233,32 @@ BEGIN
   WHERE id = post_uuid;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- Enforce that best_answer_comment_id references a comment on the same post
+CREATE OR REPLACE FUNCTION enforce_best_answer_comment_same_post()
+RETURNS TRIGGER AS $$
+BEGIN
+  IF NEW.best_answer_comment_id IS NULL THEN
+    RETURN NEW;
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM comments c
+    WHERE c.id = NEW.best_answer_comment_id
+      AND c.post_id = NEW.id
+  ) THEN
+    RAISE EXCEPTION 'best_answer_comment_id must reference a comment on the same post';
+  END IF;
+
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS trg_enforce_best_answer_comment_same_post ON posts;
+CREATE TRIGGER trg_enforce_best_answer_comment_same_post
+BEFORE INSERT OR UPDATE OF best_answer_comment_id ON posts
+FOR EACH ROW
+EXECUTE FUNCTION enforce_best_answer_comment_same_post();
 
 -- Function to mark best answer (only post author can call)
 CREATE OR REPLACE FUNCTION mark_best_answer(post_uuid uuid, comment_uuid uuid)
